@@ -10,6 +10,8 @@ This project is a modified derivative of KParser, originally created by David Sm
 
 The current development release is **Preview 22**, assembly version **0.22.0**. It is usable on Sanctum but should still be treated as preview software. Memory layouts, private-server client builds, and combat-log behavior can change.
 
+Official Setup and Portable packages are published on the [GitHub Releases page](https://github.com/Hubris4Life/Kparser-Sanctum-Edition/releases). The repository itself intentionally contains source rather than compiled application builds.
+
 ## Highlights
 
 - Automatic Sanctum/XiLoader process and chat-log detection
@@ -60,7 +62,7 @@ Generated executables, parse databases, user settings, and installer payloads ar
 
 ## Data and privacy
 
-KParser reads chat and selected player-state information from a locally running FFXI process. Parse databases, settings, exports, and saved build comparisons are stored locally. The project does not include dedicated analytics or telemetry, but inherited legacy components include an obsolete Google translation helper and an optional localhost ZeroMQ packet-reader path. See [Privacy and memory access](docs/PRIVACY-AND-MEMORY-ACCESS.md).
+KParser reads chat and selected player-state information from a locally running FFXI process. Parse databases, settings, exports, and saved build comparisons are stored locally. The project does not include dedicated analytics or telemetry. The inherited ZeroMQ packet-reader experiment has been removed from Sanctum Edition. See [Privacy and memory access](docs/PRIVACY-AND-MEMORY-ACCESS.md).
 
 ## Compatibility
 

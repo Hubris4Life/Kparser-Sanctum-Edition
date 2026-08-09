@@ -24,7 +24,7 @@ Runtime files are stored below the current user's Local Application Data folder.
 
 The dashboard communicates with its engine through a named pipe restricted to the current Windows user. The pipe is not intended to accept remote connections.
 
-The inherited engine also contains an optional ZeroMQ packet-reader path that connects only to localhost port 43350. Normal Sanctum memory parsing does not require a public network listener.
+The inherited engine previously contained an unfinished ZeroMQ packet-reader path. Sanctum Edition removes that reader and its native networking libraries. Normal Sanctum parsing uses direct local-process memory access and does not open the historical ZeroMQ connection.
 
 ## External communication
 

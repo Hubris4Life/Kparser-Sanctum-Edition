@@ -18,6 +18,7 @@ src/modern-ui/KParser.Sanctum.UI/Assets/EnginePayload.zip
 
 # Runtime data and local settings
 *.sdf
+!src/legacy-engine/ParserCore/KPDatabase.sdf
 *.db
 *.log
 *.dmp

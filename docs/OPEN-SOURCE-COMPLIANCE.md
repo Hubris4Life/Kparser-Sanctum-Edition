@@ -38,7 +38,7 @@ Do not remove or replace the original copyright header.
 
 ## Separate third-party obligations
 
-GPL licensing does not replace the licenses for SQL Server Compact, the Visual C++ runtime, .NET, ZedGraph, clrzmq, or ZeroMQ. Complete the verification items in THIRD-PARTY-NOTICES.md before uploading an installer.
+GPL licensing does not replace the licenses for SQL Server Compact, the Visual C++ runtime, .NET, or ZedGraph. Complete the verification items in THIRD-PARTY-NOTICES.md before uploading an installer.
 
 ## Private use
 

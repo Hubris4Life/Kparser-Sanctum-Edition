@@ -17,6 +17,7 @@ The Sanctum Edition work includes:
 - Server-rule DoT estimation and player-stat capture support
 - Installer and portable single-file packaging
 - Disabled the obsolete inherited Google AJAX translation key and no-key network path
+- Removed the unfinished inherited ZeroMQ PacketReader and migrated old Packet preferences to the supported RAM reader
 
 ## Inherited engine files changed for Sanctum
 

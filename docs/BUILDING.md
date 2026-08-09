@@ -22,7 +22,9 @@ From a Visual Studio Developer PowerShell:
 
 The engine must remain x86 because its memory structures and SQL Server Compact native dependencies are 32-bit.
 
-The legacy tree retains its historical clrzmq package and ZedGraph reference. Verify their exact license and source-package obligations before distributing the resulting DLLs. See [Third-party notices](THIRD-PARTY-NOTICES.md).
+`src/legacy-engine/ParserCore/KPDatabase.sdf` is the empty ten-table schema template embedded by ParserCore. It contains no parse, player, or account rows and must remain in the source tree for reproducible builds.
+
+The legacy tree retains its historical ZedGraph reference. Include the exact ZedGraph 5.1.5 license and source archive when distributing the resulting DLLs. See [Third-party notices](THIRD-PARTY-NOTICES.md).
 
 ## Build the modern interface
 

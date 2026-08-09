@@ -18,6 +18,6 @@ If private reporting has not been enabled, contact the repository owner through 
 - CSV and parse-database file handling
 - Party-chat keyboard injection
 - Legacy Google translation requests
-- Local ZeroMQ packet subscriptions
+- Release packaging and third-party dependency integrity
 
 Downloaded binaries should be obtained only from this repository's release page and should be matched to the published release checksum when checksums are provided.

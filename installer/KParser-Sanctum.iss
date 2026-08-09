@@ -7,7 +7,10 @@ AppId={{9028E6D2-CEFE-498A-B3E5-87CBF37EA047}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
-AppPublisher=Sanctum
+AppPublisher=Sanctum Edition contributors
+AppPublisherURL=https://github.com/Hubris4Life/Kparser-Sanctum-Edition
+AppSupportURL=https://github.com/Hubris4Life/Kparser-Sanctum-Edition/issues
+AppUpdatesURL=https://github.com/Hubris4Life/Kparser-Sanctum-Edition/releases
 DefaultDirName={localappdata}\Programs\KParser Sanctum Modern
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
@@ -28,7 +31,8 @@ SetupLogging=yes
 VersionInfoVersion=0.22.0.0
 VersionInfoProductName={#MyAppName}
 VersionInfoDescription=Installs KParser - Sanctum Edition and its complete parser engine
-VersionInfoCompany=Sanctum
+VersionInfoCompany=Sanctum Edition contributors
+VersionInfoCopyright=Copyright (C) 2026 Sanctum Edition contributors
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

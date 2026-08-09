@@ -5,6 +5,7 @@ All notable public changes should be documented here. Preview entries describe d
 ## Unreleased
 
 - Repository documentation, licensing, privacy, security, and release guidance prepared for public source distribution.
+- Removed the unused inherited ZeroMQ packet-reader dependency from public builds.
 
 ## Preview 22 - 0.22.0 - 2026
 

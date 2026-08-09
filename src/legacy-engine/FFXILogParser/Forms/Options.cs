@@ -34,6 +34,10 @@ namespace WaywardGamers.KParser
         public Options(bool isParseRunning)
         {
             InitializeComponent();
+            // The inherited Packet option depended on an unfinished ZeroMQ reader.
+            // Sanctum supports direct RAM parsing and log parsing only.
+            dataSourcePackets.Visible = false;
+            dataSourcePackets.Enabled = false;
             parseRunningAtOpen = isParseRunning;
             InitializeMemoryOffsetDetectionControls();
 
@@ -73,8 +77,6 @@ namespace WaywardGamers.KParser
                     return DataSource.Log;
                 else if (dataSourceRam.Checked)
                     return DataSource.Ram;
-                else if (dataSourcePackets.Checked)
-                    return DataSource.Packet;
                 else
                     return DataSource.Log;
             }
@@ -85,7 +87,7 @@ namespace WaywardGamers.KParser
                 else if (value == DataSource.Log)
                     dataSourceLogs.Checked = true;
                 else if (value == DataSource.Packet)
-                    dataSourcePackets.Checked = true;
+                    dataSourceRam.Checked = true;
             }
         }
 
@@ -462,8 +464,8 @@ namespace WaywardGamers.KParser
                 !memoryOffsetDetectionWorker.IsBusy;
             memoryOffsetDetectionStatus.Enabled = dataSourceRam.Checked;
 
-            // If reading from RAM via either method, allow the process to be specified.
-            specifyPID.Enabled = (dataSourceRam.Checked || dataSourcePackets.Checked);
+            // Direct RAM reading can target a specific FFXI process.
+            specifyPID.Enabled = dataSourceRam.Checked;
         }
 
         private void InitializeMemoryOffsetDetectionControls()

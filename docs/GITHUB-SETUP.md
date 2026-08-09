@@ -35,6 +35,6 @@ Do not describe the entire application as merely inspired by KParser.
 
 ## First release
 
-Publishing the source repository does not automatically clear every bundled dependency for binary redistribution. The current SQL Server Compact, Visual C++ runtime, ZedGraph, clrzmq, libzmq, and .NET notices must be completed as described in THIRD-PARTY-NOTICES.md before attaching the setup or portable executable.
+Publishing the source repository does not automatically clear every bundled dependency for binary redistribution. The SQL Server Compact, Visual C++ runtime, ZedGraph, and .NET notices must be included as described in THIRD-PARTY-NOTICES.md before attaching the setup or portable executable.
 
 When those items are complete, follow RELEASING.md and attach the binaries to a versioned GitHub release rather than committing them to the default branch.

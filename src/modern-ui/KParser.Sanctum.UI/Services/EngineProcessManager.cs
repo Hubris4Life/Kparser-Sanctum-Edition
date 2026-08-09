@@ -144,7 +144,7 @@ internal sealed class EngineProcessManager : IDisposable
         return candidates.FirstOrDefault(File.Exists) ?? ExtractEmbeddedEngine();
     }
 
-    private static string? ExtractEmbeddedEngine()
+    internal static string? ExtractEmbeddedEngine()
     {
         const string resourceName = "KParser.Sanctum.EnginePayload.zip";
         using var payloadStream = Assembly.GetExecutingAssembly()

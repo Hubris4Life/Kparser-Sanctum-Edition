@@ -1,24 +1,36 @@
-using System.Reflection;
+using System.Diagnostics;
 
 if (args.Length != 2)
     throw new ArgumentException("Expected the portable assembly path and extraction root.");
 
-var assemblyPath = Path.GetFullPath(args[0]);
+var portablePath = Path.GetFullPath(args[0]);
 var extractionRoot = Path.GetFullPath(args[1]);
-Environment.SetEnvironmentVariable("KPARSER_SANCTUM_PORTABLE_ENGINE_DIR", extractionRoot);
+if (!File.Exists(portablePath))
+    throw new FileNotFoundException("The portable executable was not found.", portablePath);
 
-var assembly = Assembly.LoadFrom(assemblyPath);
-var managerType = assembly.GetType(
-    "KParser.Sanctum.UI.Services.EngineProcessManager",
-    throwOnError: true)!;
-var extractionMethod = managerType.GetMethod(
-    "ExtractEmbeddedEngine",
-    BindingFlags.NonPublic | BindingFlags.Static)
-    ?? throw new MissingMethodException(managerType.FullName, "ExtractEmbeddedEngine");
+Directory.CreateDirectory(extractionRoot);
+var startInfo = new ProcessStartInfo
+{
+    FileName = portablePath,
+    UseShellExecute = true,
+    Verb = "runas",
+    WindowStyle = ProcessWindowStyle.Hidden
+};
+startInfo.ArgumentList.Add("--verify-portable-payload");
+startInfo.ArgumentList.Add(extractionRoot);
 
-var enginePath = extractionMethod.Invoke(null, null) as string;
-if (string.IsNullOrWhiteSpace(enginePath) || !File.Exists(enginePath))
-    throw new InvalidOperationException("The portable engine was not extracted.");
+using var process = Process.Start(startInfo)
+    ?? throw new InvalidOperationException("The portable verification process did not start.");
+using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+await process.WaitForExitAsync(timeout.Token);
+if (process.ExitCode != 0)
+    throw new InvalidOperationException(
+        $"The portable verification process exited with code {process.ExitCode}.");
+
+var enginePath = Directory
+    .EnumerateFiles(extractionRoot, "KParser-Sanctum.exe", SearchOption.AllDirectories)
+    .SingleOrDefault()
+    ?? throw new InvalidOperationException("The portable engine was not extracted.");
 
 var requiredFiles = new[]
 {

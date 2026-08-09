@@ -35,7 +35,7 @@ Sanctum Edition adds a modern WPF interface, automated Sanctum/XiLoader memory d
 
 ## Third-party software
 
-The application depends on separately copyrighted components including Microsoft .NET, Microsoft SQL Server Compact, the Microsoft Visual C++ runtime, ZedGraph, clrzmq, and ZeroMQ. Their licenses are not replaced by the KParser license. See [Third-party notices](docs/THIRD-PARTY-NOTICES.md) before distributing a binary package.
+The application depends on separately copyrighted components including Microsoft .NET, Microsoft SQL Server Compact, the Microsoft Visual C++ runtime, and ZedGraph. Their licenses are not replaced by the KParser license. See [Third-party notices](docs/THIRD-PARTY-NOTICES.md) before distributing a binary package.
 
 ## Trademarks and non-endorsement
 

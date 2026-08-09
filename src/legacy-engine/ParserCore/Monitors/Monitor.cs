@@ -164,7 +164,10 @@ namespace WaywardGamers.KParser.Monitoring
                     currentReader = RamReader.Instance;
                     break;
                 case DataSource.Packet:
-                    currentReader = PacketReader.Instance;
+                    // PacketReader was an unfinished localhost ZeroMQ experiment.
+                    // Preserve compatibility with old settings by using the supported
+                    // Sanctum RAM reader instead.
+                    currentReader = RamReader.Instance;
                     break;
                 case DataSource.Database:
                     currentReader = DatabaseReader.Instance;
@@ -213,7 +216,8 @@ namespace WaywardGamers.KParser.Monitoring
                     currentReader = RamReader.Instance;
                     break;
                 case DataSource.Packet:
-                    currentReader = PacketReader.Instance;
+                    // Migrate historical Packet preferences to RAM parsing.
+                    currentReader = RamReader.Instance;
                     break;
                 case DataSource.Database:
                     currentReader = DatabaseReader.Instance;

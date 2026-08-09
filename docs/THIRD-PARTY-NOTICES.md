@@ -16,16 +16,11 @@ This inventory is based on the current Preview 22 source and payload. It must be
 - Copyright metadata: Copyright (C) 2003-2007 John Champion
 - Upstream project: https://sourceforge.net/projects/zedgraph/
 - Reported upstream license: GNU Library/Lesser GPL version 2
-- Release requirement: Include the applicable license notice and provide the corresponding ZedGraph source or a compliant source-access method for the exact binary distributed.
+- Release materials: `third_party/ZedGraph-5.1.5` contains the applicable LGPL 2.1 text and the official SourceForge 5.1.5 source archive. The archive metadata uses assembly version `5.1.5.*`, matching the bundled `5.1.5.28844` binary.
 
-## clrzmq and historical libzmq
+## Removed historical dependency: clrzmq and libzmq
 
-- clrzmq package version observed: 2.2.5
-- Package author/owner metadata: zeromq
-- Local package license: GNU Lesser General Public License version 3
-- Preserved license: src/legacy-engine/packages/clrzmq.2.2.5/LICENSE
-- Historical project: http://www.zeromq.org/bindings:clr
-- Release requirement: Confirm the exact libzmq binary version and its historical license; distribute the relevant license, notices, and source-access materials. Current ZeroMQ licensing must not be substituted automatically for an older DLL's license.
+The upstream tree contained an unfinished optional PacketReader using clrzmq 2.2.5 and a historical native libzmq binary. Sanctum Edition does not use that reader. The reader, package references, and binaries were removed before the public binary release and are not part of the Sanctum distribution.
 
 ## Microsoft SQL Server Compact 4.0
 
@@ -54,14 +49,13 @@ This inventory is based on the current Preview 22 source and payload. It must be
 - Project: https://jrsoftware.org/isinfo.php
 - Release requirement: Follow the Inno Setup license and do not misrepresent the installer compiler as part of this project's source.
 
-## Release blockers to resolve
+## Release packaging requirements
 
 Before the first public binary release:
 
-1. Add the exact ZedGraph license text and matching source-access material to the release package.
-2. Identify the exact native libzmq version contained in the clrzmq 2.2.5 package and archive its matching source and license.
-3. Add Microsoft SQL Server Compact redistribution terms or replace the dependency with a distribution method whose terms have been verified.
-4. Add the Visual C++ 2008 redistribution notice required for the shipped runtime.
-5. Copy the .NET runtime's generated license and third-party notice files into both distribution formats.
+1. Copy `third_party/ZedGraph-5.1.5` into each distribution.
+2. Copy the SQL Server Compact EULA and redistribution notice from `third_party/Microsoft-SQL-Server-Compact-4.0`.
+3. Copy the Visual C++ 2008 runtime notice from `third_party/Microsoft-VC90-CRT`.
+4. Copy the .NET license and third-party notices from `third_party/Microsoft-dotnet`.
 
 Until these items are completed, the source repository can be published, but the bundled setup and portable executables should be treated as not yet cleared for public redistribution.
