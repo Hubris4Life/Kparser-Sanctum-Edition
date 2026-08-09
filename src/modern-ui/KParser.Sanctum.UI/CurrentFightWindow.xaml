@@ -1,0 +1,583 @@
+<Window x:Class="KParser.Sanctum.UI.CurrentFightWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="KParser - Live Monitor"
+        Width="760"
+        Height="560"
+        MinWidth="360"
+        MinHeight="205"
+        Background="Transparent"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        ResizeMode="CanResizeWithGrip"
+        FontFamily="{StaticResource InterfaceFont}"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        Topmost="{Binding IsAlwaysOnTop}">
+    <Window.Resources>
+        <Color x:Key="ChromeColor">#1B1E23</Color>
+        <Color x:Key="PanelColor">#22262C</Color>
+        <Color x:Key="RaisedColor">#2C3139</Color>
+        <Color x:Key="BorderColor">#424953</Color>
+        <Color x:Key="AccentColor">#CAA656</Color>
+        <Color x:Key="PrimaryTextColor">#EBEDF0</Color>
+        <Color x:Key="MutedTextColor">#AAB0B8</Color>
+        <Color x:Key="RuleColor">#3B424C</Color>
+        <Color x:Key="SelectedRowColor">#3B3424</Color>
+        <Color x:Key="SelectedRowTextColor">#F0D18A</Color>
+        <Color x:Key="RowHoverColor">#2C3139</Color>
+        <SolidColorBrush x:Key="ChromeBrush" Color="{DynamicResource ChromeColor}" Opacity="{Binding BackgroundOpacity}" />
+        <SolidColorBrush x:Key="PanelBrush" Color="{DynamicResource PanelColor}" Opacity="{Binding BackgroundOpacity}" />
+        <SolidColorBrush x:Key="RaisedBrush" Color="{DynamicResource RaisedColor}" Opacity="{Binding BackgroundOpacity}" />
+        <SolidColorBrush x:Key="BorderBrush" Color="{DynamicResource BorderColor}" />
+        <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource AccentColor}" />
+        <SolidColorBrush x:Key="TextBrush" Color="{DynamicResource PrimaryTextColor}" />
+        <SolidColorBrush x:Key="MutedTextBrush" Color="{DynamicResource MutedTextColor}" />
+        <SolidColorBrush x:Key="RuleBrush" Color="{DynamicResource RuleColor}" />
+        <SolidColorBrush x:Key="SelectedRowBrush" Color="{DynamicResource SelectedRowColor}" />
+        <SolidColorBrush x:Key="SelectedRowTextBrush" Color="{DynamicResource SelectedRowTextColor}" />
+        <SolidColorBrush x:Key="RowHoverBrush" Color="{DynamicResource RowHoverColor}" />
+
+        <Style x:Key="CompactButtonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Background" Value="{StaticResource RaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="12,5" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="2">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.4" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource RowHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource ChromeBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TinyButtonStyle" TargetType="Button" BasedOn="{StaticResource CompactButtonStyle}">
+            <Setter Property="Padding" Value="7,2" />
+            <Setter Property="FontSize" Value="11" />
+        </Style>
+
+        <Style x:Key="AccentButtonStyle" TargetType="Button" BasedOn="{StaticResource CompactButtonStyle}">
+            <Setter Property="Background" Value="#8A6A25" />
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="TinyAccentButtonStyle" TargetType="Button" BasedOn="{StaticResource TinyButtonStyle}">
+            <Setter Property="Background" Value="#8A6A25" />
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="ScopeToggleStyle" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="ToggleBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="2">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="ToggleBorder" Property="Background" Value="{StaticResource RaisedBrush}" />
+                                <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TinyToggleStyle" TargetType="RadioButton" BasedOn="{StaticResource ScopeToggleStyle}">
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="FontSize" Value="10" />
+        </Style>
+
+        <Style x:Key="PinToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="PinBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="2">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="PinBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="PinBorder" Property="Background" Value="{StaticResource SelectedRowBrush}" />
+                                <Setter TargetName="PinBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TinyPinToggleStyle" TargetType="ToggleButton" BasedOn="{StaticResource PinToggleStyle}">
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="FontSize" Value="10" />
+        </Style>
+
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="{StaticResource RaisedBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="7,6" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+        </Style>
+
+        <Style TargetType="DataGridRow">
+            <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource RuleBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="MinHeight" Value="31" />
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{StaticResource SelectedRowBrush}" />
+                    <Setter Property="Foreground" Value="{StaticResource SelectedRowTextBrush}" />
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource RaisedBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="DataGridCell">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="7,4" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        </Style>
+
+        <Style x:Key="TitleButtonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="10,3" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="TitleButtonBorder" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TitleButtonBorder" Property="Background" Value="{StaticResource RaisedBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="TitleButtonBorder" Property="Background" Value="{StaticResource SelectedRowBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="MonitorSliderStyle" TargetType="Slider">
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid Margin="4,0">
+                            <Border Height="3" Background="{StaticResource BorderBrush}" VerticalAlignment="Center" CornerRadius="2" />
+                            <Track x:Name="PART_Track" VerticalAlignment="Center">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static Slider.DecreaseLarge}" Opacity="0" Focusable="False" />
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Width="10" Height="14" Background="{StaticResource AccentBrush}">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Border Background="{TemplateBinding Background}" BorderBrush="#F0D18A" BorderThickness="1" CornerRadius="2" />
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static Slider.IncreaseLarge}" Opacity="0" Focusable="False" />
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Background="{StaticResource ChromeBrush}">
+        <Grid x:Name="FullLayout">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsCompactMode}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="28" />
+                <RowDefinition Height="54" />
+                <RowDefinition Height="80" />
+                <RowDefinition Height="38" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="46" />
+                <RowDefinition Height="26" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Background="{StaticResource PanelBrush}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Background="#01000000" MouseLeftButtonDown="WindowDragArea_MouseLeftButtonDown">
+                    <TextBlock Text="KParser - Live Monitor" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="10,0" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,6,0">
+                    <TextBlock Text="TRANSPARENCY" Foreground="{StaticResource MutedTextBrush}" FontSize="10" VerticalAlignment="Center" />
+                    <Slider Width="92"
+                            Minimum="0"
+                            Maximum="100"
+                            Value="{Binding BackgroundTransparencyPercent, Mode=TwoWay}"
+                            Style="{StaticResource MonitorSliderStyle}"
+                            ToolTip="Background transparency" />
+                    <TextBlock Text="{Binding BackgroundTransparencyPercent, StringFormat={}{0:0}%}" Foreground="{StaticResource MutedTextBrush}" FontSize="10" Width="34" VerticalAlignment="Center" />
+                </StackPanel>
+                <Button Grid.Column="2" Content="—" Click="Minimize_Click" Style="{StaticResource TitleButtonStyle}" />
+                <Button Grid.Column="3" Content="×" Click="TitleClose_Click" Style="{StaticResource TitleButtonStyle}" />
+            </Grid>
+
+            <Grid Grid.Row="1" Margin="12,7,12,5">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="9" Height="9" Fill="{Binding ParserStatusBrush}" Margin="0,0,9,0" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding StatusLabel}" Foreground="{StaticResource MutedTextBrush}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding EncounterName}" Foreground="{StaticResource TextBrush}" FontSize="18" FontWeight="SemiBold" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <ToggleButton Grid.Column="1"
+                              Content="PIN ON TOP"
+                              IsChecked="{Binding IsAlwaysOnTop, Mode=TwoWay}"
+                              Style="{StaticResource PinToggleStyle}"
+                              Margin="0,0,6,0"
+                              VerticalAlignment="Top" />
+                <Button Grid.Column="2"
+                        Content="COMPACT MODE"
+                        Command="{Binding ToggleCompactModeCommand}"
+                        Style="{StaticResource TinyButtonStyle}"
+                        VerticalAlignment="Top" />
+            </Grid>
+
+            <Border Grid.Row="2"
+                    Margin="12,0"
+                    Background="{StaticResource PanelBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="2">
+                <Grid Margin="12,7">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="{Binding EncounterState}" Foreground="{StaticResource AccentBrush}" FontSize="12" />
+                    <Grid Grid.Row="1" Margin="0,5,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1*" />
+                            <ColumnDefinition Width="1.25*" />
+                            <ColumnDefinition Width="1*" />
+                            <ColumnDefinition Width="1*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="TIME" Foreground="{StaticResource MutedTextBrush}" FontSize="10" />
+                            <TextBlock Text="{Binding Duration}" Foreground="{StaticResource TextBrush}" FontSize="16" FontWeight="SemiBold" Margin="0,3,0,0" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="DAMAGE" Foreground="{StaticResource MutedTextBrush}" FontSize="10" />
+                            <TextBlock Text="{Binding TotalDamage}" Foreground="{StaticResource TextBrush}" FontSize="16" FontWeight="SemiBold" Margin="0,3,0,0" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="DPS" Foreground="{StaticResource MutedTextBrush}" FontSize="10" />
+                            <TextBlock Text="{Binding AllianceDps}" Foreground="{StaticResource TextBrush}" FontSize="16" FontWeight="SemiBold" Margin="0,3,0,0" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="3">
+                            <TextBlock Text="EVENTS" Foreground="{StaticResource MutedTextBrush}" FontSize="10" />
+                            <TextBlock Text="{Binding EventCount}" Foreground="{StaticResource TextBrush}" FontSize="13" FontWeight="SemiBold" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="3" Margin="12,5,12,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="14" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <RadioButton Content="All Fights" GroupName="FullFightView" IsChecked="{Binding IsAllFightsView, Mode=TwoWay}" Style="{StaticResource ScopeToggleStyle}" Margin="0,0,5,0" />
+                <RadioButton Grid.Column="1" Content="Current Fight" GroupName="FullFightView" IsChecked="{Binding IsCurrentFightView, Mode=TwoWay}" Style="{StaticResource ScopeToggleStyle}" />
+                <RadioButton Grid.Column="3" Content="Alliance" GroupName="FullCombatantScope" IsChecked="{Binding IsAllianceScope, Mode=TwoWay}" Style="{StaticResource ScopeToggleStyle}" Margin="0,0,5,0" />
+                <RadioButton Grid.Column="4" Content="Party" GroupName="FullCombatantScope" IsChecked="{Binding IsPartyScope, Mode=TwoWay}" Style="{StaticResource ScopeToggleStyle}" Margin="0,0,5,0" />
+                <RadioButton Grid.Column="5" Content="Players" GroupName="FullCombatantScope" IsChecked="{Binding IsPlayersScope, Mode=TwoWay}" Style="{StaticResource ScopeToggleStyle}" />
+                <TextBlock Grid.Column="6" Text="{Binding ViewLabel}" Foreground="{StaticResource MutedTextBrush}" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+
+            <DataGrid Grid.Row="4"
+                      Margin="12,0"
+                      ItemsSource="{Binding Combatants}"
+                      SelectedItem="{Binding SelectedCombatant, Mode=TwoWay}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      CanUserResizeRows="False"
+                      CanUserSortColumns="True"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="None"
+                      BorderBrush="{StaticResource BorderBrush}"
+                      BorderThickness="1"
+                      Background="{StaticResource PanelBrush}"
+                      Foreground="{StaticResource TextBrush}"
+                      SelectionMode="Single"
+                      SelectionUnit="FullRow"
+                      EnableRowVirtualization="True">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="34" />
+                    <DataGridTextColumn Header="Combatant" Binding="{Binding Name}" Width="1.45*" />
+                    <DataGridTextColumn Header="Job" Binding="{Binding Job}" Width="0.75*" />
+                    <DataGridTextColumn Header="Damage" Binding="{Binding DamageDisplay}" Width="1*" />
+                    <DataGridTextColumn Header="Share" Binding="{Binding ShareDisplay}" Width="0.72*" />
+                    <DataGridTextColumn Header="DPS" Binding="{Binding DpsDisplay}" Width="0.82*" />
+                    <DataGridTextColumn Header="Acc." Binding="{Binding AccuracyDisplay}" Width="0.72*" />
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <Grid Grid.Row="5" Margin="12,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Button Content="Start" Command="{Binding StartParserCommand}" IsEnabled="{Binding IsStartEnabled}" Style="{StaticResource AccentButtonStyle}" Margin="0,0,6,0" />
+                <Button Grid.Column="1" Content="Stop" Command="{Binding StopParserCommand}" IsEnabled="{Binding IsStopEnabled}" Style="{StaticResource CompactButtonStyle}" Margin="0,0,6,0" />
+                <Button Grid.Column="2" Content="Reset" Command="{Binding ResetParserCommand}" IsEnabled="{Binding IsResetEnabled}" Style="{StaticResource CompactButtonStyle}" />
+                <Button Grid.Column="4" Content="Save Build" Click="SaveBuild_Click" IsEnabled="{Binding CanSaveBuild}" Style="{StaticResource CompactButtonStyle}" Margin="0,0,6,0" />
+                <Button Grid.Column="5" Content="Send to Party" Click="SendParty_Click" IsEnabled="{Binding CanSendPartySummary}" Style="{StaticResource CompactButtonStyle}" Margin="0,0,6,0" />
+                <Button Grid.Column="6" Content="Export" Click="Export_Click" Style="{StaticResource CompactButtonStyle}" Margin="0,0,6,0" />
+                <Button Grid.Column="7" Content="Copy Summary" Click="CopySummary_Click" Style="{StaticResource CompactButtonStyle}" Margin="0,0,6,0" />
+                <Button Grid.Column="8" Content="Close" Click="Close_Click" Style="{StaticResource CompactButtonStyle}" />
+            </Grid>
+
+            <Border Grid.Row="6" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+                <TextBlock Text="{Binding Notice}"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           FontSize="11"
+                           Margin="14,0"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+            </Border>
+        </Grid>
+
+        <Grid x:Name="CompactLayout">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsCompactMode}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="38" />
+                <RowDefinition Height="30" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="36" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Margin="7,3">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Background="#01000000" MouseLeftButtonDown="WindowDragArea_MouseLeftButtonDown">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="8" Height="8" Fill="{Binding ParserStatusBrush}" Margin="0,0,7,0" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding StatusLabel}" Foreground="{StaticResource MutedTextBrush}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding ViewLabel}" Foreground="{StaticResource TextBrush}" FontSize="13" FontWeight="SemiBold" Margin="0,3,0,0" />
+                    </StackPanel>
+                </Border>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0">
+                    <TextBlock Text="TRANSPARENCY" Foreground="{StaticResource MutedTextBrush}" FontSize="8" VerticalAlignment="Center" />
+                    <Slider Width="50"
+                            Minimum="0"
+                            Maximum="100"
+                            Value="{Binding BackgroundTransparencyPercent, Mode=TwoWay}"
+                            Style="{StaticResource MonitorSliderStyle}"
+                            ToolTip="{Binding BackgroundTransparencyPercent, StringFormat=Background transparency: {0:0}%}" />
+                </StackPanel>
+                <ToggleButton Grid.Column="2" Content="PIN" IsChecked="{Binding IsAlwaysOnTop, Mode=TwoWay}" Style="{StaticResource TinyPinToggleStyle}" Margin="0,0,5,0" VerticalAlignment="Center" />
+                <Button Grid.Column="3" Content="EXPAND" Command="{Binding ToggleCompactModeCommand}" Style="{StaticResource TinyButtonStyle}" VerticalAlignment="Center" />
+            </Grid>
+
+            <Grid Grid.Row="1" Margin="6,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <RadioButton Content="All" GroupName="CompactFightView" IsChecked="{Binding IsAllFightsView, Mode=TwoWay}" Style="{StaticResource TinyToggleStyle}" Margin="0,0,4,0" />
+                <RadioButton Grid.Column="1" Content="Current" GroupName="CompactFightView" IsChecked="{Binding IsCurrentFightView, Mode=TwoWay}" Style="{StaticResource TinyToggleStyle}" />
+                <RadioButton Grid.Column="3" Content="Alliance" GroupName="CompactCombatantScope" IsChecked="{Binding IsAllianceScope, Mode=TwoWay}" Style="{StaticResource TinyToggleStyle}" Margin="0,0,4,0" />
+                <RadioButton Grid.Column="4" Content="Party" GroupName="CompactCombatantScope" IsChecked="{Binding IsPartyScope, Mode=TwoWay}" Style="{StaticResource TinyToggleStyle}" Margin="0,0,4,0" />
+                <RadioButton Grid.Column="5" Content="Players" GroupName="CompactCombatantScope" IsChecked="{Binding IsPlayersScope, Mode=TwoWay}" Style="{StaticResource TinyToggleStyle}" />
+            </Grid>
+
+            <DataGrid Grid.Row="2"
+                      Margin="6,1,6,0"
+                      ItemsSource="{Binding Combatants}"
+                      SelectedItem="{Binding SelectedCombatant, Mode=TwoWay}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      CanUserResizeRows="False"
+                      CanUserSortColumns="True"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="None"
+                      BorderBrush="{StaticResource BorderBrush}"
+                      BorderThickness="1"
+                      Background="{StaticResource PanelBrush}"
+                      Foreground="{StaticResource TextBrush}"
+                      SelectionMode="Single"
+                      SelectionUnit="FullRow"
+                      EnableRowVirtualization="True">
+                <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                        <Setter Property="MinHeight" Value="27" />
+                    </Style>
+                </DataGrid.RowStyle>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="30" />
+                    <DataGridTextColumn Header="Combatant" Binding="{Binding Name}" Width="1.5*" />
+                    <DataGridTextColumn Header="Damage" Binding="{Binding DamageDisplay}" Width="0.95*" />
+                    <DataGridTextColumn Header="Share" Binding="{Binding ShareDisplay}" Width="0.7*" />
+                    <DataGridTextColumn Header="DPS" Binding="{Binding DpsDisplay}" Width="0.78*" />
+                    <DataGridTextColumn Header="Acc.%" Binding="{Binding AccuracyDisplay}" Width="0.7*" />
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <Grid Grid.Row="3" Margin="6,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button Content="Start" Command="{Binding StartParserCommand}" IsEnabled="{Binding IsStartEnabled}" Style="{StaticResource TinyAccentButtonStyle}" Margin="0,0,5,0" />
+                <Button Grid.Column="1" Content="Stop" Command="{Binding StopParserCommand}" IsEnabled="{Binding IsStopEnabled}" Style="{StaticResource TinyButtonStyle}" Margin="0,0,5,0" />
+                <Button Grid.Column="2" Content="Reset" Command="{Binding ResetParserCommand}" IsEnabled="{Binding IsResetEnabled}" Style="{StaticResource TinyButtonStyle}" Margin="0,0,5,0" />
+                <Button Grid.Column="3" Content="Save" Click="SaveBuild_Click" IsEnabled="{Binding CanSaveBuild}" Style="{StaticResource TinyButtonStyle}" Margin="0,0,5,0" />
+                <Button Grid.Column="4" Content="Party" Click="SendParty_Click" IsEnabled="{Binding CanSendPartySummary}" Style="{StaticResource TinyButtonStyle}" Margin="0,0,5,0" />
+                <Button Grid.Column="5" Content="Close" Click="Close_Click" Style="{StaticResource TinyButtonStyle}" />
+                <TextBlock Grid.Column="7"
+                           Text="{Binding Notice}"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           FontSize="10"
+                           HorizontalAlignment="Left"
+                           VerticalAlignment="Center"
+                           Margin="10,0,0,0"
+                           TextTrimming="CharacterEllipsis" />
+            </Grid>
+        </Grid>
+        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" IsHitTestVisible="False" />
+    </Grid>
+</Window>

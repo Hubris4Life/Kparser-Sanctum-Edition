@@ -1,0 +1,30 @@
+# Visual Studio and .NET build output
+.vs/
+**/bin/
+**/obj/
+**/TestResults/
+tests/PortableSmoke/extracted-*/
+*.user
+*.suo
+*.pdb
+
+# Generated packages and release output
+artifacts/
+dist/
+publish/
+installer/output/
+installer/payload/
+src/modern-ui/KParser.Sanctum.UI/Assets/EnginePayload.zip
+
+# Runtime data and local settings
+*.sdf
+*.db
+*.log
+*.dmp
+KParserDB/
+PortableEngine/
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini

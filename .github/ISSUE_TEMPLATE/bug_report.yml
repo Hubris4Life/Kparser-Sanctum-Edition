@@ -1,0 +1,64 @@
+name: Bug report
+description: Report a reproducible problem in KParser - Sanctum Edition
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a problem. Remove player-private information from screenshots, logs, exports, and databases. Do not report security vulnerabilities here.
+  - type: input
+    id: version
+    attributes:
+      label: Sanctum Edition version
+      description: Include the preview or release number and whether you used setup or portable.
+      placeholder: Preview 22, setup edition
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Windows version and the XiLoader/FFXI process names shown in Task Manager.
+    validations:
+      required: true
+  - type: dropdown
+    id: memory
+    attributes:
+      label: Did memory detection succeed?
+      options:
+        - "Yes"
+        - "No"
+        - "Not applicable"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Describe the smallest repeatable sequence that produces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Include sanitized parser messages as text when possible.
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I removed credentials, private chat, memory dumps, and unnecessary player-identifying information.
+          required: true
+        - label: This report does not describe a security vulnerability.
+          required: true

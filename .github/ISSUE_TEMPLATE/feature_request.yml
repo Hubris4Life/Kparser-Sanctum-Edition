@@ -1,0 +1,39 @@
+name: Feature request
+description: Suggest an improvement for KParser - Sanctum Edition
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Explain what is difficult today and who would benefit.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the desired result without assuming a particular implementation.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Parsing engine
+        - Main reports
+        - Live monitor
+        - Memory detection
+        - Export or sharing
+        - Installation or updates
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Supporting evidence
+      description: For game-mechanics requests, include sanitized logs or a reliable data source when available.

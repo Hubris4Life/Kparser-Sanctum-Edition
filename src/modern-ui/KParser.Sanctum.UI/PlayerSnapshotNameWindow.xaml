@@ -1,0 +1,96 @@
+<Window x:Class="KParser.Sanctum.UI.PlayerSnapshotNameWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Save Player Parse"
+        Width="500"
+        Height="245"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        ShowActivated="True"
+        Topmost="True"
+        Background="{DynamicResource CanvasBrush}"
+        FontFamily="Segoe UI">
+    <Window.Resources>
+        <Color x:Key="ChromeColor">#1B1E23</Color>
+        <Color x:Key="FieldColor">#16191D</Color>
+        <Color x:Key="BorderColor">#424953</Color>
+        <Color x:Key="AccentColor">#CAA656</Color>
+        <Color x:Key="PrimaryTextColor">#EBEDF0</Color>
+        <Color x:Key="MutedTextColor">#AAB0B8</Color>
+        <Color x:Key="CanvasColor">#22262C</Color>
+        <Color x:Key="CanvasTextColor">#EBEDF0</Color>
+        <Color x:Key="CanvasMutedColor">#AAB0B8</Color>
+        <Color x:Key="DetailTextColor">#AAB0B8</Color>
+        <SolidColorBrush x:Key="ChromeBrush" Color="{DynamicResource ChromeColor}" />
+        <SolidColorBrush x:Key="FieldBrush" Color="{DynamicResource FieldColor}" />
+        <SolidColorBrush x:Key="BorderBrush" Color="{DynamicResource BorderColor}" />
+        <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource AccentColor}" />
+        <SolidColorBrush x:Key="PrimaryTextBrush" Color="{DynamicResource PrimaryTextColor}" />
+        <SolidColorBrush x:Key="MutedTextBrush" Color="{DynamicResource MutedTextColor}" />
+        <SolidColorBrush x:Key="CanvasBrush" Color="{DynamicResource CanvasColor}" />
+        <SolidColorBrush x:Key="CanvasTextBrush" Color="{DynamicResource CanvasTextColor}" />
+        <SolidColorBrush x:Key="CanvasMutedBrush" Color="{DynamicResource CanvasMutedColor}" />
+        <SolidColorBrush x:Key="DetailTextBrush" Color="{DynamicResource DetailTextColor}" />
+    </Window.Resources>
+    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="38" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Background="{StaticResource ChromeBrush}" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <TextBlock Text="Save Player Parse"
+                           Foreground="{StaticResource PrimaryTextBrush}"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Margin="14,0" />
+                <Button Content="×"
+                        Width="42"
+                        HorizontalAlignment="Right"
+                        Foreground="{StaticResource MutedTextBrush}"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        FontSize="18"
+                        Click="Cancel_Click" />
+            </Grid>
+
+            <Grid Grid.Row="1" Margin="22,18,22,18">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="Give this build or gear setup a recognizable name."
+                           Foreground="{StaticResource DetailTextBrush}"
+                           FontSize="13" />
+                <TextBlock Grid.Row="1"
+                           Text="Examples: Naegling baseline, TP set B, Store TP test"
+                           Foreground="{StaticResource CanvasMutedBrush}"
+                           FontSize="11"
+                           Margin="0,5,0,12" />
+                <TextBox x:Name="LabelTextBox"
+                         Grid.Row="2"
+                         Height="36"
+                         MaxLength="100"
+                         Padding="9,6"
+                         VerticalContentAlignment="Center"
+                         Background="{StaticResource FieldBrush}"
+                         Foreground="{StaticResource PrimaryTextBrush}"
+                         CaretBrush="{StaticResource PrimaryTextBrush}"
+                         BorderBrush="{StaticResource BorderBrush}"
+                         BorderThickness="1"
+                         FontSize="13"
+                         KeyDown="LabelTextBox_KeyDown" />
+                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                    <Button Content="Cancel" Width="88" Height="32" Margin="0,0,8,0" Click="Cancel_Click" />
+                    <Button Content="Save Parse" Width="104" Height="32" Background="#8A6A25" Foreground="White" BorderBrush="{StaticResource AccentBrush}" Click="Save_Click" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>
