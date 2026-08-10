@@ -2,7 +2,7 @@
 
 ## Supported environment
 
-KParser - Sanctum Edition is a Windows application intended for the Sanctum-supported XiLoader/FFXI client environment. Other private servers and retail FFXI may use different processes, chat layouts, offsets, and message rules.
+KParser - Sanctum Edition supports a fully tested Sanctum XI profile and a conservative Other profile. Individual private servers may still use different chat layouts, offsets, and message rules.
 
 ## Setup edition
 
@@ -27,17 +27,21 @@ The portable application extracts its matching engine below:
 
 Do not replace extracted engine files with files from another release.
 
-## Optional SanctumChat addon
+## Server profile
 
-Preview 23 includes the matching SanctumChat Ashita v4 addon but does not install or load it automatically.
+Choose **Server > Sanctum XI** for Sanctum's server-specific pet names and calculated DoT rules. Choose **Server > Other** for observed-log defaults. Changing profiles archives the current parse and starts a clean one.
 
-1. Open **Tools > SanctumChat Addon** in KParser.
+## Optional KParserBridge addon for Other
+
+Preview 24 includes KParserBridge but does not install or load it automatically. SanctumChat is distributed separately by Sanctum.
+
+1. Select **Server > Other** and open **Tools > KParserBridge Addon**.
 2. Select a detected Ashita v4 installation, or click **Browse** and select its main folder or `addons` folder.
 3. Click **Install / Update**.
-4. In game, run `/addon load sanctumchat`.
-5. Run `/sanctumchat status` and confirm that the addon is registered with the Sanctum server.
+4. In game, run `/addon load kparserbridge`.
+5. Run `/kparserbridge status` and confirm that current party pet mappings are visible.
 
-When updating an existing copy, KParser preserves the previous addon folder beside it as a timestamped backup. Remove also renames and preserves the installed folder instead of deleting it. The addon is Sanctum-specific and should not be enabled on unrelated servers.
+When updating an existing copy, KParser preserves the previous addon folder beside it as a timestamped backup. Remove also renames and preserves the installed folder instead of deleting it. KParserBridge does not alter chat or nameplates and does not send outgoing packets.
 
 ## Basic operation
 
@@ -63,7 +67,7 @@ Uninstalling the application may intentionally leave user data in that location.
 - Run KParser and XiLoader/FFXI at the same privilege level.
 - Close obsolete ChatlogMemloc utilities; Sanctum Edition performs its own detection.
 - Retry Detect Memory after zoning if the client was still loading.
-- Confirm that the game process is named xiloader, pol, or ffximain as expected by the installed version.
+- Confirm that the game process is named xiloader, horizon-loader, pol, or ffximain as expected by the installed version.
 - If the client was updated, report the exact release and process information without publishing a memory dump.
 
 ## Party-chat summaries

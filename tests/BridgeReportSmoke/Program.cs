@@ -18,7 +18,9 @@ namespace BridgeReportSmoke
             if (args.Length == 1 && args[0] == "--pet-protocol-only")
             {
                 VerifySanctumPetProtocol();
+                VerifyServerCompatibilityProfiles();
                 Console.WriteLine("sanctum-pet-protocol=verified");
+                Console.WriteLine("server-compatibility=verified");
                 return 0;
             }
 
@@ -327,6 +329,62 @@ namespace BridgeReportSmoke
             {
                 throw new InvalidOperationException(
                     "An unresolved owner tag changed or discarded pet damage.");
+            }
+        }
+
+        private static void VerifyServerCompatibilityProfiles()
+        {
+            Assembly parserCore = typeof(DatabaseManager).Assembly;
+            Type compatibility = parserCore.GetType(
+                "WaywardGamers.KParser.Bridge.ServerCompatibility",
+                true);
+            MethodInfo configure = compatibility.GetMethod(
+                "Configure",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Type classifier = parserCore.GetType(
+                "WaywardGamers.KParser.Parsing.ClassifyEntity",
+                true);
+            MethodInfo classify = classifier.GetMethod(
+                "ClassifyByName",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            if (configure == null || classify == null)
+                throw new MissingMemberException("Compatibility profile members were not found.");
+
+            string temporaryDirectory = Path.Combine(
+                Path.GetTempPath(),
+                "KParser-CompatibilitySmoke-" + Guid.NewGuid().ToString("N"));
+            string mappingPath = Path.Combine(temporaryDirectory, "pet_mappings.tsv");
+            Directory.CreateDirectory(temporaryDirectory);
+            try
+            {
+                File.WriteAllText(
+                    mappingPath,
+                    "# kparserbridge-v1\n1\t123\tTestCompanion\t456\tTestowner\tpacket-entity\thigh\t2026-01-01T00:00:00Z\n");
+                configure.Invoke(null, new object[] { "other", mappingPath });
+
+                EntityType mapped = (EntityType)classify.Invoke(
+                    null,
+                    new object[] { "TestCompanion" });
+                if (mapped != EntityType.Pet)
+                    throw new InvalidOperationException("Other profile did not recognize a mapped pet.");
+
+                EntityType sanctumAliasInOther = (EntityType)classify.Invoke(
+                    null,
+                    new object[] { "Garuda@Nazgul" });
+                if (sanctumAliasInOther == EntityType.Pet)
+                    throw new InvalidOperationException("Other profile applied Sanctum pet-name rules.");
+
+                configure.Invoke(null, new object[] { "sanctum", string.Empty });
+                EntityType sanctumAlias = (EntityType)classify.Invoke(
+                    null,
+                    new object[] { "Garuda@Nazgul" });
+                if (sanctumAlias != EntityType.Pet)
+                    throw new InvalidOperationException("Sanctum profile did not restore Sanctum pet-name rules.");
+            }
+            finally
+            {
+                configure.Invoke(null, new object[] { "sanctum", string.Empty });
+                Directory.Delete(temporaryDirectory, true);
             }
         }
 

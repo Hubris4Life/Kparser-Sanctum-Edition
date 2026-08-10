@@ -98,6 +98,8 @@
   <ItemGroup>
     <Compile Include="Bridge\SanctumBridgeModels.cs" />
     <Compile Include="Bridge\SanctumBridgeServer.cs" />
+    <Compile Include="Bridge\ServerCompatibility.cs" />
+    <Compile Include="Bridge\KParserBridgePetMappings.cs" />
     <Compile Include="Bridge\SanctumCraftingTracker.cs" />
     <Compile Include="Bridge\SanctumDamageSnapshotBuilder.cs" />
     <Compile Include="Bridge\SanctumDotEstimator.cs" />

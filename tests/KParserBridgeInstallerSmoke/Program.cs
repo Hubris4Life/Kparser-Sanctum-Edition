@@ -2,8 +2,8 @@ using KParser.Sanctum.UI.Services;
 
 var testRoot = Path.Combine(
     Path.GetTempPath(),
-    "KParser-SanctumChatInstallerSmoke-" + Guid.NewGuid().ToString("N"));
-var sourceDirectory = Path.Combine(testRoot, "bundled", "sanctumchat");
+    "KParser-BridgeInstallerSmoke-" + Guid.NewGuid().ToString("N"));
+var sourceDirectory = Path.Combine(testRoot, "bundled", "kparserbridge");
 var ashitaRoot = Path.Combine(testRoot, "Ashita v4");
 var addonsDirectory = Path.Combine(ashitaRoot, "addons");
 
@@ -12,12 +12,12 @@ try
     Directory.CreateDirectory(sourceDirectory);
     Directory.CreateDirectory(addonsDirectory);
     File.WriteAllText(Path.Combine(ashitaRoot, "Ashita-cli.exe"), string.Empty);
-    File.WriteAllText(Path.Combine(sourceDirectory, "README.md"), "SanctumChat smoke payload");
-    WriteAddonVersion(sourceDirectory, "0.2.4");
+    File.WriteAllText(Path.Combine(sourceDirectory, "README.md"), "KParserBridge smoke payload");
+    WriteAddonVersion(sourceDirectory, "0.1.0");
 
-    var service = new SanctumChatInstallerService(sourceDirectory);
+    var service = new KParserBridgeInstallerService(sourceDirectory);
     Require(service.IsBundledAddonAvailable, "The bundled addon was not recognized.");
-    Require(service.BundledVersion == "0.2.4", "The bundled addon version was not read.");
+    Require(service.BundledVersion == "0.1.0", "The bundled addon version was not read.");
 
     var initial = service.InspectPath(ashitaRoot);
     Require(!initial.IsInstalled, "A fresh Ashita test folder reported an installed addon.");
@@ -28,12 +28,12 @@ try
 
     var firstInstall = service.InstallOrUpdate(ashitaRoot);
     Require(firstInstall.Location.IsInstalled, "The addon was not installed.");
-    Require(firstInstall.Location.InstalledVersion == "0.2.4", "The installed version was incorrect.");
+    Require(firstInstall.Location.InstalledVersion == "0.1.0", "The installed version was incorrect.");
     Require(firstInstall.BackupDirectory is null, "A first install unexpectedly created a backup.");
 
-    WriteAddonVersion(sourceDirectory, "0.2.5");
+    WriteAddonVersion(sourceDirectory, "0.1.1");
     var update = service.InstallOrUpdate(Path.Combine(ashitaRoot, "addons"));
-    Require(update.Location.InstalledVersion == "0.2.5", "The addon was not updated.");
+    Require(update.Location.InstalledVersion == "0.1.1", "The addon was not updated.");
     Require(
         update.BackupDirectory is not null && Directory.Exists(update.BackupDirectory),
         "The previous addon was not preserved during update.");
@@ -42,7 +42,7 @@ try
     Require(Directory.Exists(removedDirectory), "The recoverable removal folder was not created.");
     Require(!Directory.Exists(update.Location.AddonDirectory), "The active addon folder still exists after removal.");
 
-    Console.WriteLine("sanctumchat-installer=verified");
+    Console.WriteLine("kparserbridge-installer=verified");
 }
 finally
 {
@@ -53,7 +53,7 @@ finally
 static void WriteAddonVersion(string directory, string version)
 {
     File.WriteAllText(
-        Path.Combine(directory, "sanctumchat.lua"),
+        Path.Combine(directory, "kparserbridge.lua"),
         "addon = addon or {}\naddon.version = '" + version + "';\n");
 }
 

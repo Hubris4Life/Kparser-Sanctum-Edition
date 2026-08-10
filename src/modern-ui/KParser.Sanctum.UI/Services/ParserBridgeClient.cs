@@ -17,6 +17,9 @@ internal sealed class ParserBridgeClient
         PropertyNameCaseInsensitive = true
     };
 
+    public string ServerProfile { get; set; } = "sanctum";
+    public string PetMappingPath { get; set; } = string.Empty;
+
     public async Task<BridgeSnapshot> GetSnapshotAsync(CancellationToken cancellationToken)
     {
         return await GetSnapshotAsync(
@@ -81,7 +84,9 @@ internal sealed class ParserBridgeClient
                 displayMode,
                 groupMode,
                 searchText,
-                excludeCommonDrops),
+                excludeCommonDrops,
+                ServerProfile,
+                PetMappingPath),
             JsonOptions);
         return await SendRequestAsync<BridgeSnapshot>(
             request,
@@ -115,7 +120,9 @@ internal sealed class ParserBridgeClient
                 null,
                 null,
                 null,
-                false),
+                false,
+                ServerProfile,
+                PetMappingPath),
             JsonOptions);
         var timeout = string.Equals(command, "detect", StringComparison.OrdinalIgnoreCase)
             ? TimeSpan.FromSeconds(45)
@@ -202,5 +209,7 @@ internal sealed class ParserBridgeClient
         string? DisplayMode,
         string? GroupMode,
         string? SearchText,
-        bool ExcludeCommonDrops);
+        bool ExcludeCommonDrops,
+        string ServerProfile,
+        string PetMappingPath);
 }

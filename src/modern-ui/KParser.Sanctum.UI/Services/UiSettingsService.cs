@@ -24,7 +24,8 @@ internal sealed class UiSettingsService
             {
                 var freshSettings = new AppSettings
                 {
-                    CompactMonitorHeightOptimized = true
+                    CompactMonitorHeightOptimized = true,
+                    ServerProfile = "other"
                 };
                 return freshSettings;
             }
@@ -49,7 +50,8 @@ internal sealed class UiSettingsService
             settings.MainGroupMode ??= "player";
             settings.CurrentFightCombatantScope ??= "all";
             settings.CurrentFightView ??= "all";
-            settings.SanctumChatAshitaRoot ??= string.Empty;
+            settings.ServerProfile = NormalizeServerProfile(settings.ServerProfile);
+            settings.KParserBridgeAshitaRoot ??= string.Empty;
             settings.CurrentFightBackgroundTransparencyPercent = Math.Clamp(
                 settings.CurrentFightBackgroundTransparencyPercent,
                 0,
@@ -58,7 +60,7 @@ internal sealed class UiSettingsService
         }
         catch (Exception)
         {
-            return new AppSettings();
+            return new AppSettings { ServerProfile = "other" };
         }
     }
 
@@ -81,4 +83,11 @@ internal sealed class UiSettingsService
             return false;
         }
     }
+
+    internal static string NormalizeServerProfile(string? profile) =>
+        string.Equals(profile?.Trim(), "sanctum", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(profile?.Trim(), "sanctum xi", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(profile?.Trim(), "sanctumxi", StringComparison.OrdinalIgnoreCase)
+            ? "sanctum"
+            : "other";
 }

@@ -213,6 +213,10 @@ namespace WaywardGamers.KParser.Bridge
                 return serializer.Serialize(CreateError("Unsupported bridge request."));
             }
 
+            ServerCompatibility.Configure(
+                request.ServerProfile,
+                request.PetMappingPath);
+
             if (string.Equals(request.Type, "snapshot", StringComparison.OrdinalIgnoreCase))
                 return serializer.Serialize(SanctumDamageSnapshotBuilder.Build(
                     request.Scope,
@@ -226,9 +230,18 @@ namespace WaywardGamers.KParser.Bridge
                     request.ExcludeCommonDrops));
 
             if (string.Equals(request.Type, "command", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.Equals(request.Command, "capturestats", StringComparison.OrdinalIgnoreCase) &&
+                    ServerCompatibility.SupportsCalculatedDots == false)
+                {
+                    return serializer.Serialize(CreateCommandError(
+                        "capturestats",
+                        "Calculated DoT stat capture is available only in the Sanctum XI profile."));
+                }
                 return serializer.Serialize(ProcessCommand(
                     request.Command,
                     request.TargetPlayer));
+            }
 
             return serializer.Serialize(CreateError("Unsupported bridge request."));
         }

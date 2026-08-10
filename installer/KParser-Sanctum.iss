@@ -1,5 +1,5 @@
 #define MyAppName "KParser - Sanctum Edition"
-#define MyAppVersion "Preview 23"
+#define MyAppVersion "Preview 24"
 #define MyAppExeName "KParser-Sanctum-Modern.exe"
 
 [Setup]
@@ -19,7 +19,7 @@ PrivilegesRequired=lowest
 SetupArchitecture=x64
 MinVersion=10.0.17763
 OutputDir=output
-OutputBaseFilename=KParser-Sanctum-Setup-Preview-23
+OutputBaseFilename=KParser-Sanctum-Setup-Preview-24
 SetupIconFile=..\src\legacy-engine\FFXILogParser\Gobby.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/ultra64
@@ -28,7 +28,7 @@ WizardStyle=modern
 CloseApplications=yes
 RestartApplications=no
 SetupLogging=yes
-VersionInfoVersion=0.23.0.0
+VersionInfoVersion=0.24.0.0
 VersionInfoProductName={#MyAppName}
 VersionInfoDescription=Installs KParser - Sanctum Edition and its complete parser engine
 VersionInfoCompany=Sanctum Edition contributors

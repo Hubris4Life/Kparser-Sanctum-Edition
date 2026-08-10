@@ -8,13 +8,13 @@ This project is a modified derivative of KParser, originally created by David Sm
 
 ## Project status
 
-The current development release is **Preview 23**, assembly version **0.23.0**. It is usable on Sanctum but should still be treated as preview software. Memory layouts, private-server client builds, and combat-log behavior can change.
+The current development release is **Preview 24**, assembly version **0.24.0**. It includes selectable Sanctum XI and Other compatibility profiles but should still be treated as preview software. Memory layouts, private-server client builds, and combat-log behavior can change.
 
 Official Setup and Portable packages are published on the [GitHub Releases page](https://github.com/Hubris4Life/Kparser-Sanctum-Edition/releases). The repository itself intentionally contains source rather than compiled application builds.
 
 ## Highlights
 
-- Automatic Sanctum/XiLoader process and chat-log detection
+- Automatic XiLoader, Horizon Loader, PlayOnline, and FFXIMain chat-log detection
 - Running-total, current-fight, individual-fight, and per-monster reports
 - Damage dealt and taken, healing, buffs, debuffs, deaths, fights, experience, HELM, crafting, chat, and item-drop reports
 - Melee, ranged, weapon-skill, ability, magic, skillchain, additional-effect, reactive-damage, calculated DoT, accuracy, and multi-attack views
@@ -24,8 +24,9 @@ Official Setup and Portable packages are published on the [GitHub Releases page]
 - CSV export and party-chat summary support
 - Named player parse snapshots and side-by-side build comparisons
 - Local player-information labels and notes
-- SanctumChat-aware pet ownership, owner-attributed totals, and separate player/pet damage filters
-- Opt-in SanctumChat Ashita v4 installer with detected and manually selected locations
+- Persistent Sanctum XI / Other compatibility profiles with rule isolation
+- Owner-attributed pet totals and separate player/pet damage filters
+- Optional passive KParserBridge Ashita v4 mapping for Other servers
 - Dark and light interface themes
 
 ## How it works
@@ -57,7 +58,7 @@ Repository owners should also read [Publishing this folder on GitHub](docs/GITHU
     src/legacy-engine/   Modified GPL KParser engine and plugins
     tests/               Bridge, portable-package, comparison, and memory probes
     installer/           Inno Setup definition; generated payload is excluded
-    addons/sanctumchat/  Optional Sanctum Ashita v4 chat integration
+    addons/kparserbridge/ Optional Other-server Ashita v4 pet mapping
     docs/                Architecture, privacy, history, release, and license notes
     assets/              Repository images
 
@@ -69,7 +70,7 @@ KParser reads chat and selected player-state information from a locally running 
 
 ## Compatibility
 
-Sanctum Edition is designed and tested for Sanctum's supported XiLoader/FFXI client environment. It is not guaranteed to work with retail FFXI, EdenXI, HorizonXI, or other private servers without memory-layout and parser changes.
+Sanctum XI is the fully tested profile. Other mode uses conservative observed-log behavior and shared client detection, but individual private servers may still require combat-message adapters.
 
 Run KParser at the same Windows privilege level as XiLoader/FFXI. If one process is elevated and the other is not, memory detection and chat access may fail.
 

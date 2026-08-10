@@ -4,6 +4,22 @@ All notable public changes should be documented here. Preview entries describe d
 
 ## Unreleased
 
+## Preview 24 - 0.24.0 - 2026
+
+### Added
+
+- Added persistent **Server > Sanctum XI / Other** compatibility profiles.
+- Added optional passive KParserBridge Ashita v4 pet-owner mapping for Other servers.
+- Added profile identity and supported-feature metadata to the local engine bridge.
+
+### Safety and compatibility
+
+- Profile changes archive the current parse and begin a clean session so incompatible rules cannot mix.
+- Other mode disables Sanctum-only pet-name decoding, calculated DoT reports, and player-stat DoT capture.
+- Ambiguous generic pet mappings are never merged into a player total.
+- Fresh installations default to Other; existing Preview 23 settings migrate to Sanctum XI to preserve behavior.
+- Added Horizon Loader recognition alongside XiLoader, PlayOnline, and FFXIMain.
+
 ## Preview 23 - 0.23.0 - 2026
 
 ### Added

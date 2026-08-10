@@ -8,14 +8,14 @@ using Microsoft.Win32;
 
 namespace KParser.Sanctum.UI;
 
-public partial class SanctumChatInstallerWindow : Window
+public partial class KParserBridgeInstallerWindow : Window
 {
-    private readonly SanctumChatInstallerService installerService;
-    private readonly ObservableCollection<SanctumChatInstallLocation> locations = new();
+    private readonly KParserBridgeInstallerService installerService;
+    private readonly ObservableCollection<KParserBridgeInstallLocation> locations = new();
     private string? preferredPath;
 
-    internal SanctumChatInstallerWindow(
-        SanctumChatInstallerService installerService,
+    internal KParserBridgeInstallerWindow(
+        KParserBridgeInstallerService installerService,
         string? preferredPath)
     {
         this.installerService = installerService;
@@ -29,7 +29,7 @@ public partial class SanctumChatInstallerWindow : Window
     }
 
     internal string? SelectedAshitaRoot =>
-        (LocationComboBox.SelectedItem as SanctumChatInstallLocation)?.AshitaRoot;
+        (LocationComboBox.SelectedItem as KParserBridgeInstallLocation)?.AshitaRoot;
 
     private void RefreshLocations(string? selectPath = null)
     {
@@ -59,7 +59,7 @@ public partial class SanctumChatInstallerWindow : Window
         }
     }
 
-    private void AddOrSelectLocation(SanctumChatInstallLocation location)
+    private void AddOrSelectLocation(KParserBridgeInstallLocation location)
     {
         var existing = locations.FirstOrDefault(item =>
             string.Equals(item.AshitaRoot, location.AshitaRoot, StringComparison.OrdinalIgnoreCase));
@@ -73,7 +73,7 @@ public partial class SanctumChatInstallerWindow : Window
 
     private void UpdateSelectedLocation()
     {
-        if (LocationComboBox.SelectedItem is not SanctumChatInstallLocation location)
+        if (LocationComboBox.SelectedItem is not KParserBridgeInstallLocation location)
         {
             InstalledStatusText.Text = "No location selected";
             InstallFolderText.Text = "—";
@@ -128,7 +128,7 @@ public partial class SanctumChatInstallerWindow : Window
 
     private void Install_Click(object sender, RoutedEventArgs e)
     {
-        if (LocationComboBox.SelectedItem is not SanctumChatInstallLocation location)
+        if (LocationComboBox.SelectedItem is not KParserBridgeInstallLocation location)
             return;
 
         try
@@ -136,12 +136,12 @@ public partial class SanctumChatInstallerWindow : Window
             var result = installerService.InstallOrUpdate(location.AshitaRoot);
             AddOrSelectLocation(result.Location);
             StatusText.Text = result.BackupDirectory is null
-                ? "SanctumChat was installed successfully. Load it in game with /addon load sanctumchat."
-                : "SanctumChat was updated successfully. The previous version was preserved at " + result.BackupDirectory;
+                ? "KParserBridge was installed successfully. Load it in game with /addon load kparserbridge."
+                : "KParserBridge was updated successfully. The previous version was preserved at " + result.BackupDirectory;
             MessageBox.Show(
                 this,
-                "SanctumChat is ready.\n\nIn game, run:\n/addon load sanctumchat\n\nThen use /sanctumchat status to confirm the server registration.",
-                "SanctumChat installed",
+                "KParserBridge is ready.\n\nIn game, run:\n/addon load kparserbridge\n\nThen use /kparserbridge status to confirm local pet mapping.",
+                "KParserBridge installed",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
         }
@@ -150,8 +150,8 @@ public partial class SanctumChatInstallerWindow : Window
             StatusText.Text = "Installation failed: " + ex.Message;
             MessageBox.Show(
                 this,
-                "SanctumChat could not be installed.\n\n" + ex.Message,
-                "SanctumChat installation failed",
+                "KParserBridge could not be installed.\n\n" + ex.Message,
+                "KParserBridge installation failed",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -159,13 +159,13 @@ public partial class SanctumChatInstallerWindow : Window
 
     private void Remove_Click(object sender, RoutedEventArgs e)
     {
-        if (LocationComboBox.SelectedItem is not SanctumChatInstallLocation location)
+        if (LocationComboBox.SelectedItem is not KParserBridgeInstallLocation location)
             return;
 
         var confirmation = MessageBox.Show(
             this,
-            "Remove SanctumChat from this Ashita installation?\n\nThe folder will be renamed and preserved so it can be recovered.",
-            "Remove SanctumChat",
+            "Remove KParserBridge from this Ashita installation?\n\nThe folder will be renamed and preserved so it can be recovered.",
+            "Remove KParserBridge",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,
             MessageBoxResult.No);
@@ -176,7 +176,7 @@ public partial class SanctumChatInstallerWindow : Window
         {
             var recoveryPath = installerService.MoveInstalledAddonAside(location.AshitaRoot);
             AddOrSelectLocation(installerService.InspectPath(location.AshitaRoot));
-            StatusText.Text = "SanctumChat was removed. Its previous files were preserved at " + recoveryPath;
+            StatusText.Text = "KParserBridge was removed. Its previous files were preserved at " + recoveryPath;
         }
         catch (Exception ex)
         {
@@ -184,7 +184,7 @@ public partial class SanctumChatInstallerWindow : Window
             MessageBox.Show(
                 this,
                 ex.Message,
-                "SanctumChat removal failed",
+                "KParserBridge removal failed",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -208,7 +208,7 @@ public partial class SanctumChatInstallerWindow : Window
             var fullPath = Path.GetFullPath(path);
             if (string.Equals(Path.GetFileName(fullPath), "addons", StringComparison.OrdinalIgnoreCase))
                 return Directory.GetParent(fullPath)?.FullName ?? fullPath;
-            if (string.Equals(Path.GetFileName(fullPath), "sanctumchat", StringComparison.OrdinalIgnoreCase) &&
+            if (string.Equals(Path.GetFileName(fullPath), "kparserbridge", StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(Path.GetFileName(Directory.GetParent(fullPath)?.FullName), "addons", StringComparison.OrdinalIgnoreCase))
             {
                 return Directory.GetParent(Directory.GetParent(fullPath)!.FullName)?.FullName ?? fullPath;

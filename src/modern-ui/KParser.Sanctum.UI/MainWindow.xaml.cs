@@ -39,9 +39,13 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         settings = settingsService.Load();
+        settings.ServerProfile = UiSettingsService.NormalizeServerProfile(settings.ServerProfile);
+        bridgeClient.ServerProfile = settings.ServerProfile;
+        bridgeClient.PetMappingPath = GetKParserBridgeMappingPath(settings.KParserBridgeAshitaRoot);
         InitializeComponent();
         viewModel = new MainWindowViewModel();
         DataContext = viewModel;
+        viewModel.ConfigureServerProfile(settings.ServerProfile);
         viewModel.RestorePreferences(
             settings.MainReport,
             settings.MainEncounterKey,
@@ -50,6 +54,7 @@ public partial class MainWindow : Window
             settings.MainGroupMode);
         AutoDetectMemoryMenuItem.IsChecked = settings.AutoDetectMemoryOnStartup;
         LightModeMenuItem.IsChecked = settings.IsLightMode;
+        UpdateServerProfileMenu();
         ThemeService.Apply(this, settings.IsLightMode);
         ApplyWindowPlacement(this, settings.MainWindow);
 
@@ -81,7 +86,7 @@ public partial class MainWindow : Window
             {
                 var message = engineProcessManager.EnginePath is null
                     ? "Bundled engine files were not found."
-                    : "The bundled engine did not start. Try running the application at the same privilege as Sanctum.";
+                    : "The bundled engine did not start. Try running KParser at the same privilege as the game client.";
                 viewModel.SetEngineLaunchFailed(message);
             }
         }
@@ -166,9 +171,10 @@ public partial class MainWindow : Window
     private async Task ExecuteEngineCommandAsync(
         string command,
         Window? promptOwner = null,
-        string? targetPlayer = null)
+        string? targetPlayer = null,
+        bool confirmReset = true)
     {
-        if (command == "reset")
+        if (command == "reset" && confirmReset)
         {
             var confirmation = MessageBox.Show(
                 promptOwner ?? this,
@@ -345,6 +351,9 @@ public partial class MainWindow : Window
         BridgeSnapshot snapshot,
         CancellationToken cancellationToken)
     {
+        if (!string.Equals(settings.ServerProfile, "sanctum", StringComparison.OrdinalIgnoreCase))
+            return;
+
         if (DateTime.UtcNow < nextAutomaticStatCaptureUtc)
             return;
 
@@ -958,11 +967,23 @@ public partial class MainWindow : Window
         playerComparisonWindow.Show();
     }
 
-    private void ManageSanctumChat_Click(object sender, RoutedEventArgs e)
+    private void ManageKParserBridge_Click(object sender, RoutedEventArgs e)
     {
-        var installerWindow = new SanctumChatInstallerWindow(
-            new SanctumChatInstallerService(),
-            settings.SanctumChatAshitaRoot)
+        if (string.Equals(settings.ServerProfile, "sanctum", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(
+                this,
+                "Sanctum XI pet naming is supplied by Sanctum's own installer. " +
+                "KParserBridge is only needed for the Other server profile.",
+                "Sanctum XI integration",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var installerWindow = new KParserBridgeInstallerWindow(
+            new KParserBridgeInstallerService(),
+            settings.KParserBridgeAshitaRoot)
         {
             Owner = this
         };
@@ -971,8 +992,95 @@ public partial class MainWindow : Window
 
         if (!string.IsNullOrWhiteSpace(installerWindow.SelectedAshitaRoot))
         {
-            settings.SanctumChatAshitaRoot = installerWindow.SelectedAshitaRoot;
+            settings.KParserBridgeAshitaRoot = installerWindow.SelectedAshitaRoot;
+            bridgeClient.PetMappingPath = GetKParserBridgeMappingPath(settings.KParserBridgeAshitaRoot);
             settingsService.TrySave(settings, out _);
+            viewModel.SetUserNotice(
+                "KParserBridge location saved. Its pet mappings will be applied when available.");
+        }
+    }
+
+    private async void SanctumXiServer_Click(object sender, RoutedEventArgs e) =>
+        await ChangeServerProfileAsync("sanctum");
+
+    private async void OtherServer_Click(object sender, RoutedEventArgs e) =>
+        await ChangeServerProfileAsync("other");
+
+    private async Task ChangeServerProfileAsync(string profile)
+    {
+        profile = UiSettingsService.NormalizeServerProfile(profile);
+        if (string.Equals(settings.ServerProfile, profile, StringComparison.Ordinal))
+        {
+            UpdateServerProfileMenu();
+            return;
+        }
+
+        bool hasSession = viewModel.ParserRunning || viewModel.CurrentEventCount > 0;
+        if (hasSession)
+        {
+            var confirmation = MessageBox.Show(
+                this,
+                "Changing server profiles changes pet attribution and calculated-data rules. " +
+                "KParser will archive the current parse and begin a clean session. Continue?",
+                "Change server profile",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+            if (confirmation != MessageBoxResult.Yes)
+            {
+                UpdateServerProfileMenu();
+                return;
+            }
+        }
+
+        settings.ServerProfile = profile;
+        bridgeClient.ServerProfile = profile;
+        bridgeClient.PetMappingPath = profile == "other"
+            ? GetKParserBridgeMappingPath(settings.KParserBridgeAshitaRoot)
+            : string.Empty;
+        autoCapturedStatsPlayer = null;
+        nextAutomaticStatCaptureUtc = DateTime.MinValue;
+        viewModel.ConfigureServerProfile(profile);
+        UpdateServerProfileMenu();
+        settingsService.TrySave(settings, out _);
+
+        if (hasSession)
+            await ExecuteEngineCommandAsync("reset", this, null, confirmReset: false);
+        else
+            await RefreshSnapshotAsync(lifetime.Token);
+
+        viewModel.SetUserNotice(profile == "sanctum"
+            ? "Sanctum XI profile active: Sanctum pet names and server-specific DoT calculations are enabled."
+            : "Other profile active: observed log data is used; KParserBridge pet mappings are optional.");
+    }
+
+    private void UpdateServerProfileMenu()
+    {
+        bool isSanctum = string.Equals(
+            settings.ServerProfile,
+            "sanctum",
+            StringComparison.OrdinalIgnoreCase);
+        SanctumXiServerMenuItem.IsChecked = isSanctum;
+        OtherServerMenuItem.IsChecked = !isSanctum;
+        KParserBridgeAddonMenuItem.IsEnabled = !isSanctum;
+    }
+
+    private static string GetKParserBridgeMappingPath(string? ashitaRoot)
+    {
+        if (string.IsNullOrWhiteSpace(ashitaRoot))
+            return string.Empty;
+        try
+        {
+            return Path.Combine(
+                Path.GetFullPath(ashitaRoot),
+                "addons",
+                "kparserbridge",
+                "data",
+                "pet_mappings.tsv");
+        }
+        catch (Exception)
+        {
+            return string.Empty;
         }
     }
 

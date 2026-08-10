@@ -19,6 +19,8 @@ namespace WaywardGamers.KParser.Bridge
         public string GroupMode { get; set; }
         public string SearchText { get; set; }
         public bool ExcludeCommonDrops { get; set; }
+        public string ServerProfile { get; set; }
+        public string PetMappingPath { get; set; }
     }
 
     public sealed class SanctumEngineCommand
@@ -61,6 +63,8 @@ namespace WaywardGamers.KParser.Bridge
             CombatantScope = "all";
             DisplayMode = "summary";
             GroupMode = "player";
+            ServerProfile = "sanctum";
+            PetOwnershipMode = "SanctumChat";
             Columns = SanctumReportColumnsSnapshot.CreateDamageDealt();
             Filters = new List<SanctumEncounterFilterSnapshot>();
             CombatantFilters = new List<SanctumCombatantFilterSnapshot>();
@@ -76,6 +80,9 @@ namespace WaywardGamers.KParser.Bridge
         public string CombatantScope { get; set; }
         public string DisplayMode { get; set; }
         public string GroupMode { get; set; }
+        public string ServerProfile { get; set; }
+        public string PetOwnershipMode { get; set; }
+        public bool EstimatedDotsAvailable { get; set; }
         public bool ParserRunning { get; set; }
         public bool DatabaseOpen { get; set; }
         public SanctumEncounterSnapshot Encounter { get; set; }

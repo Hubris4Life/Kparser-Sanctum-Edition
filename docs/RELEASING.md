@@ -15,10 +15,10 @@ Do not publish a setup or portable executable until every item below is complete
 
 ## Versioning
 
-Preview 23 currently uses:
+Preview 24 currently uses:
 
-    Product version: 0.23.0
-    Display version: Preview 23
+    Product version: 0.24.0
+    Display version: Preview 24
 
 For stable public releases, prefer semantic tags such as v1.0.0. Every binary asset must identify the same version.
 
@@ -39,7 +39,7 @@ A GitHub release should include:
 - Setup executable
 - Portable ZIP, when offered
 - Compact portable 7z archive, when offered
-- Standalone versioned SanctumChat ZIP
+- Standalone versioned KParserBridge ZIP
 - SHA-256 checksum file
 - Release notes and known limitations
 - Direct link to the matching source tag
@@ -62,7 +62,7 @@ At minimum, verify:
 - Live monitor one-second refresh and compact mode
 - Damage, defense, healing, buff, debuff, EXP, HELM, crafting, chat, and drop reports
 - Player jobs, accuracy, share, multi-attacks, rolls, DoTs, and build comparisons
-- SanctumChat installation/update/removal, pet-owner attribution, and player-only/pet-only damage filters
+- Both server profiles, clean profile switching, KParserBridge installation/update/removal, pet-owner attribution, and player-only/pet-only filters
 - Dark and light themes
 - CSV export and party-summary fallback
 - Data cleanup on a fresh application launch

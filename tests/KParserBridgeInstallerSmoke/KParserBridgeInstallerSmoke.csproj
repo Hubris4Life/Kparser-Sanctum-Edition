@@ -4,7 +4,7 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>SanctumChatInstallerSmoke</AssemblyName>
+    <AssemblyName>KParserBridgeInstallerSmoke</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\modern-ui\KParser.Sanctum.UI\KParser.Sanctum.UI.csproj" />

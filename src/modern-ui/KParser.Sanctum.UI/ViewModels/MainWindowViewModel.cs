@@ -47,6 +47,8 @@ internal sealed class MainWindowViewModel : ObservableObject
     private bool engineConnected;
     private bool parserRunning;
     private bool engineCommandBusy;
+    private bool supportsEstimatedDots = true;
+    private string activeServerLabel = "Sanctum XI";
     private bool updatingSelectors;
     private string? pendingEncounterKey;
     private double currentDurationSeconds;
@@ -297,6 +299,7 @@ internal sealed class MainWindowViewModel : ObservableObject
     public string SummaryRateLabel { get => summaryRateLabel; private set => SetProperty(ref summaryRateLabel, value); }
     public string TotalRowLabel { get => totalRowLabel; private set => SetProperty(ref totalRowLabel, value); }
     public string FooterRightText { get => footerRightText; private set => SetProperty(ref footerRightText, value); }
+    public string ActiveServerLabel { get => activeServerLabel; private set => SetProperty(ref activeServerLabel, value); }
 
     public Brush ParserStatusBrush
     {
@@ -308,7 +311,7 @@ internal sealed class MainWindowViewModel : ObservableObject
     public bool IsStopEnabled => engineConnected && parserRunning && !engineCommandBusy;
     public bool IsResetEnabled => engineConnected && !engineCommandBusy;
     public bool IsDetectEnabled => engineConnected && !parserRunning && !engineCommandBusy;
-    public bool CanCaptureDotStats => engineConnected && !engineCommandBusy &&
+    public bool CanCaptureDotStats => supportsEstimatedDots && engineConnected && !engineCommandBusy &&
                                       SelectedCombatant is { CombatantType: "Player" };
     public bool CanSavePlayerSnapshot => hasReceivedLiveSnapshot &&
                                          selectedReport == "damageDealt" &&
@@ -321,6 +324,22 @@ internal sealed class MainWindowViewModel : ObservableObject
     public int CurrentFightCount => currentFightCount;
     public int CurrentEventCount => currentEventCount;
     public string CurrentEngineVersion => currentEngineVersion;
+    public bool ParserRunning => parserRunning;
+
+    public void ConfigureServerProfile(string profile)
+    {
+        bool isSanctum = string.Equals(profile, "sanctum", StringComparison.OrdinalIgnoreCase);
+        string previousDisplay = SelectedDisplayMode?.Key ?? "sources";
+        supportsEstimatedDots = isSanctum;
+        ActiveServerLabel = isSanctum ? "SERVER: SANCTUM XI" : "SERVER: OTHER";
+
+        UpdateDisplayModes(selectedReport);
+        updatingSelectors = true;
+        SelectedDisplayMode = DisplayModes.FirstOrDefault(option => option.Key == previousDisplay)
+                              ?? DisplayModes.FirstOrDefault();
+        updatingSelectors = false;
+        RaisePropertyChanged(nameof(CanCaptureDotStats));
+    }
 
     public void RestorePreferences(
         string report,
@@ -818,7 +837,8 @@ internal sealed class MainWindowViewModel : ObservableObject
                     DisplayModes.Add(new ReportFilterOption { Key = "weaponskills", Label = "Weapon skills" });
                     DisplayModes.Add(new ReportFilterOption { Key = "abilities", Label = "Abilities" });
                     DisplayModes.Add(new ReportFilterOption { Key = "magic", Label = "Magic" });
-                    DisplayModes.Add(new ReportFilterOption { Key = "dots", Label = "Damage over time (calculated)" });
+                    if (supportsEstimatedDots)
+                        DisplayModes.Add(new ReportFilterOption { Key = "dots", Label = "Damage over time (calculated)" });
                     DisplayModes.Add(new ReportFilterOption { Key = "skillchains", Label = "Skillchains" });
                     DisplayModes.Add(new ReportFilterOption { Key = "additional", Label = "Additional effects" });
                     DisplayModes.Add(new ReportFilterOption { Key = "reactive", Label = "Reactive damage" });

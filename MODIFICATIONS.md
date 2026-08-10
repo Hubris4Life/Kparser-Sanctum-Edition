@@ -19,6 +19,8 @@ The Sanctum Edition work includes:
 - Optional SanctumChat/Ashita pet-name expansion using authoritative server mappings
 - SanctumChat pet nameplate expansion and readable spacing for multiword pet names
 - Opt-in SanctumChat detection, installation, updating, and recoverable removal from the modern Tools menu
+- Selectable Sanctum XI and Other compatibility profiles with clean parse boundaries
+- Conservative Other-server rules and optional passive KParserBridge pet-owner mapping
 - Installer and portable single-file packaging
 - Disabled the obsolete inherited Google AJAX translation key and no-key network path
 - Removed the unfinished inherited ZeroMQ PacketReader and migrated old Packet preferences to the supported RAM reader

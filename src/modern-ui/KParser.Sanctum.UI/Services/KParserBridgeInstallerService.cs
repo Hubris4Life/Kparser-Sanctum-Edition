@@ -4,48 +4,48 @@ using System.Text.RegularExpressions;
 
 namespace KParser.Sanctum.UI.Services;
 
-internal sealed record SanctumChatInstallLocation(
+internal sealed record KParserBridgeInstallLocation(
     string AshitaRoot,
     string AddonDirectory,
     bool IsInstalled,
     string InstalledVersion)
 {
     public string DisplayName => IsInstalled
-        ? $"{AshitaRoot}  (SanctumChat {InstalledVersion})"
+        ? $"{AshitaRoot}  (KParserBridge {InstalledVersion})"
         : $"{AshitaRoot}  (not installed)";
 }
 
-internal sealed record SanctumChatInstallResult(
-    SanctumChatInstallLocation Location,
+internal sealed record KParserBridgeInstallResult(
+    KParserBridgeInstallLocation Location,
     string? BackupDirectory);
 
-internal sealed class SanctumChatInstallerService
+internal sealed class KParserBridgeInstallerService
 {
-    private const string AddonFolderName = "sanctumchat";
+    private const string AddonFolderName = "kparserbridge";
     private static readonly Regex VersionExpression = new(
         "addon\\.version\\s*=\\s*['\"](?<version>[^'\"]+)['\"]",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private readonly string bundledAddonDirectory;
 
-    public SanctumChatInstallerService()
+    public KParserBridgeInstallerService()
         : this(Path.Combine(AppContext.BaseDirectory, "Addons", AddonFolderName))
     {
     }
 
-    internal SanctumChatInstallerService(string bundledAddonDirectory)
+    internal KParserBridgeInstallerService(string bundledAddonDirectory)
     {
         this.bundledAddonDirectory = Path.GetFullPath(bundledAddonDirectory);
     }
 
     public string BundledVersion => ReadAddonVersion(
-        Path.Combine(bundledAddonDirectory, "sanctumchat.lua"));
+        Path.Combine(bundledAddonDirectory, "kparserbridge.lua"));
 
     public bool IsBundledAddonAvailable =>
-        File.Exists(Path.Combine(bundledAddonDirectory, "sanctumchat.lua")) &&
+        File.Exists(Path.Combine(bundledAddonDirectory, "kparserbridge.lua")) &&
         File.Exists(Path.Combine(bundledAddonDirectory, "README.md"));
 
-    public IReadOnlyList<SanctumChatInstallLocation> DetectInstallations(
+    public IReadOnlyList<KParserBridgeInstallLocation> DetectInstallations(
         string? preferredPath = null)
     {
         var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -104,7 +104,7 @@ internal sealed class SanctumChatInstallerService
             .ToArray();
     }
 
-    public SanctumChatInstallLocation InspectPath(string selectedPath)
+    public KParserBridgeInstallLocation InspectPath(string selectedPath)
     {
         var ashitaRoot = NormalizeAshitaRoot(selectedPath);
         if (!LooksLikeAshitaRoot(ashitaRoot))
@@ -117,16 +117,16 @@ internal sealed class SanctumChatInstallerService
         var addonsDirectory = Path.GetFullPath(Path.Combine(ashitaRoot, "addons"));
         var addonDirectory = Path.GetFullPath(Path.Combine(addonsDirectory, AddonFolderName));
         EnsureDirectChild(addonsDirectory, addonDirectory);
-        var entryFile = Path.Combine(addonDirectory, "sanctumchat.lua");
+        var entryFile = Path.Combine(addonDirectory, "kparserbridge.lua");
         var installed = File.Exists(entryFile);
-        return new SanctumChatInstallLocation(
+        return new KParserBridgeInstallLocation(
             ashitaRoot,
             addonDirectory,
             installed,
             installed ? ReadAddonVersion(entryFile) : "not installed");
     }
 
-    public SanctumChatInstallResult InstallOrUpdate(string selectedPath)
+    public KParserBridgeInstallResult InstallOrUpdate(string selectedPath)
     {
         ValidateBundledAddon();
         var location = InspectPath(selectedPath);
@@ -136,7 +136,7 @@ internal sealed class SanctumChatInstallerService
 
         var temporaryDirectory = Path.Combine(
             addonsDirectory,
-            ".sanctumchat.install-" + Guid.NewGuid().ToString("N"));
+            ".kparserbridge.install-" + Guid.NewGuid().ToString("N"));
         EnsureDirectChild(addonsDirectory, temporaryDirectory);
         string? backupDirectory = null;
 
@@ -148,7 +148,7 @@ internal sealed class SanctumChatInstallerService
             {
                 backupDirectory = CreateAvailableRecoveryPath(
                     addonsDirectory,
-                    "sanctumchat.backup");
+                    "kparserbridge.backup");
                 Directory.Move(location.AddonDirectory, backupDirectory);
             }
 
@@ -175,7 +175,7 @@ internal sealed class SanctumChatInstallerService
                 Directory.Delete(temporaryDirectory, recursive: true);
         }
 
-        return new SanctumChatInstallResult(
+        return new KParserBridgeInstallResult(
             InspectPath(location.AshitaRoot),
             backupDirectory);
     }
@@ -184,13 +184,13 @@ internal sealed class SanctumChatInstallerService
     {
         var location = InspectPath(selectedPath);
         if (!Directory.Exists(location.AddonDirectory))
-            throw new InvalidOperationException("SanctumChat is not installed in that Ashita location.");
+            throw new InvalidOperationException("KParserBridge is not installed in that Ashita location.");
 
         var addonsDirectory = Path.GetDirectoryName(location.AddonDirectory)
             ?? throw new InvalidOperationException("The Ashita addons directory could not be resolved.");
         var recoveryDirectory = CreateAvailableRecoveryPath(
             addonsDirectory,
-            "sanctumchat.removed");
+            "kparserbridge.removed");
         Directory.Move(location.AddonDirectory, recoveryDirectory);
         return recoveryDirectory;
     }
@@ -200,12 +200,12 @@ internal sealed class SanctumChatInstallerService
         if (!IsBundledAddonAvailable)
         {
             throw new FileNotFoundException(
-                "The bundled SanctumChat addon is incomplete. Reinstall KParser or use a complete portable package.",
+                "The bundled KParserBridge addon is incomplete. Reinstall KParser or use a complete portable package.",
                 bundledAddonDirectory);
         }
 
         if (BundledVersion == "unknown")
-            throw new InvalidDataException("The bundled SanctumChat version could not be read.");
+            throw new InvalidDataException("The bundled KParserBridge version could not be read.");
     }
 
     private static string NormalizeAshitaRoot(string selectedPath)

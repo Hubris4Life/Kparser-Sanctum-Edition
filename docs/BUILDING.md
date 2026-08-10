@@ -40,7 +40,7 @@ The development run expects a compatible engine in the location handled by Engin
 ## Run available smoke projects
 
     dotnet run --project .\tests\PlayerComparisonSmoke\PlayerComparisonSmoke.csproj
-    dotnet run --project .\tests\SanctumChatInstallerSmoke\SanctumChatInstallerSmoke.csproj
+    dotnet run --project .\tests\KParserBridgeInstallerSmoke\KParserBridgeInstallerSmoke.csproj
 
 PortableSmoke requires two arguments: the published portable assembly path and a disposable extraction directory. Run it only after producing a portable build.
 

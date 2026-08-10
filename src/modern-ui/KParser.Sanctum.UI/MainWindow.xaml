@@ -523,7 +523,19 @@
                     <MenuItem Header="Live Monitor" Click="OpenCurrentFight_Click" />
                     <MenuItem Header="Player Build Comparison" Click="OpenPlayerComparison_Click" />
                     <Separator />
-                    <MenuItem Header="SanctumChat Addon…" Click="ManageSanctumChat_Click" />
+                    <MenuItem x:Name="KParserBridgeAddonMenuItem"
+                              Header="KParserBridge Addon…"
+                              Click="ManageKParserBridge_Click" />
+                </MenuItem>
+                <MenuItem Header="Server" Padding="10,6">
+                    <MenuItem x:Name="SanctumXiServerMenuItem"
+                              Header="Sanctum XI"
+                              IsCheckable="True"
+                              Click="SanctumXiServer_Click" />
+                    <MenuItem x:Name="OtherServerMenuItem"
+                              Header="Other"
+                              IsCheckable="True"
+                              Click="OtherServer_Click" />
                 </MenuItem>
                 <MenuItem Header="Options" Padding="10,6">
                     <MenuItem Header="Player Information…" Click="PlayerInformation_Click" />
@@ -573,6 +585,12 @@
                 <RadioButton Content="Crafting" GroupName="ReportTabs" IsChecked="{Binding IsCraftingSelected, Mode=TwoWay}" Style="{StaticResource NavigationTabStyle}" />
             </StackPanel>
             <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Margin="0,0,20,0" VerticalAlignment="Center">
+                <TextBlock Text="{Binding ActiveServerLabel}"
+                           Foreground="{StaticResource AccentBrush}"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           Margin="0,0,18,0"
+                           VerticalAlignment="Center" />
                 <Ellipse Width="9" Height="9" Fill="{Binding ParserStatusBrush}" Margin="0,0,9,0" />
                 <TextBlock Text="{Binding ConnectionBadge}" Foreground="{StaticResource MutedChromeTextBrush}" VerticalAlignment="Center" />
             </StackPanel>

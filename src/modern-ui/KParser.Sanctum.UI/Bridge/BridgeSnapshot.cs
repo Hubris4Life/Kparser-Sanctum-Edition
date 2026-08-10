@@ -11,6 +11,9 @@ internal sealed class BridgeSnapshot
     public string CombatantScope { get; init; } = "all";
     public string DisplayMode { get; init; } = "summary";
     public string GroupMode { get; init; } = "player";
+    public string ServerProfile { get; init; } = "sanctum";
+    public string PetOwnershipMode { get; init; } = string.Empty;
+    public bool EstimatedDotsAvailable { get; init; }
     public bool ParserRunning { get; init; }
     public bool DatabaseOpen { get; init; }
     public BridgeEncounter? Encounter { get; init; }

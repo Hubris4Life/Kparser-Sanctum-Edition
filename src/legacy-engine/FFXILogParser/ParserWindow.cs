@@ -2462,7 +2462,7 @@ namespace WaywardGamers.KParser
                 return CreateBridgeCommandResult(
                     commandName,
                     false,
-                    "No accessible FFXI client was found. Log into Sanctum and run both applications at the same privilege.",
+                    "No accessible FFXI client was found. Log fully into the selected server and run both applications at the same privilege.",
                     null);
             }
 

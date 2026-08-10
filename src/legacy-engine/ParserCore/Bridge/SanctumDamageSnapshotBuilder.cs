@@ -97,6 +97,11 @@ namespace WaywardGamers.KParser.Bridge
         {
             SanctumBridgeSnapshot snapshot = new SanctumBridgeSnapshot();
             snapshot.EngineVersion = GetEngineVersion();
+            snapshot.ServerProfile = ServerCompatibility.CurrentProfile;
+            snapshot.EstimatedDotsAvailable = ServerCompatibility.SupportsCalculatedDots;
+            snapshot.PetOwnershipMode = ServerCompatibility.IsSanctumXi
+                ? "SanctumChat"
+                : (KParserBridgePetMappings.Revision == 0 ? "Observed only" : "KParserBridge");
             snapshot.Report = NormalizeReport(requestedReport);
             snapshot.CombatantScope = NormalizeCombatantScope(
                 snapshot.Report,
@@ -227,7 +232,9 @@ namespace WaywardGamers.KParser.Bridge
                 excludeCommonDrops ? "exclude-common" : "include-common",
                 parserRunning ? "running" : "stopped",
                 parseMode ?? string.Empty,
-                SanctumDotProfileStore.Revision.ToString(CultureInfo.InvariantCulture)
+                SanctumDotProfileStore.Revision.ToString(CultureInfo.InvariantCulture),
+                ServerCompatibility.CurrentProfile,
+                KParserBridgePetMappings.Revision.ToString(CultureInfo.InvariantCulture)
             });
         }
 
@@ -320,13 +327,21 @@ namespace WaywardGamers.KParser.Bridge
 
             if (snapshot.Report == "damageDealt")
             {
-                combatants = ApplySanctumPetOwnership(
-                    combatants,
-                    dataSet,
-                    snapshot.CombatantScope,
-                    snapshot.DisplayMode,
-                    snapshot.GroupMode,
-                    durationSeconds);
+                combatants = ServerCompatibility.IsSanctumXi
+                    ? ApplySanctumPetOwnership(
+                        combatants,
+                        dataSet,
+                        snapshot.CombatantScope,
+                        snapshot.DisplayMode,
+                        snapshot.GroupMode,
+                        durationSeconds)
+                    : ApplyKParserBridgePetOwnership(
+                        combatants,
+                        dataSet,
+                        snapshot.CombatantScope,
+                        snapshot.DisplayMode,
+                        snapshot.GroupMode,
+                        durationSeconds);
             }
 
             long total = combatants.Sum(row => row.Damage);
@@ -1567,6 +1582,9 @@ namespace WaywardGamers.KParser.Bridge
             string displayMode,
             bool parserRunning)
         {
+            if (ServerCompatibility.SupportsCalculatedDots == false)
+                return new List<SanctumDotAggregate>();
+
             if (displayMode == "melee" || displayMode == "ranged" ||
                 displayMode == "skillchains" || displayMode == "additional" ||
                 displayMode == "reactive")
@@ -1607,6 +1625,9 @@ namespace WaywardGamers.KParser.Bridge
             bool parserRunning,
             double durationSeconds)
         {
+            if (ServerCompatibility.SupportsCalculatedDots == false)
+                return new List<SanctumCombatantSnapshot>();
+
             List<SanctumDotAggregate> estimates = SanctumDotEstimator.Estimate(
                 battles,
                 events,
@@ -3726,6 +3747,95 @@ namespace WaywardGamers.KParser.Bridge
                 petRow.Job = "Pet of " + owner.CombatantName;
         }
 
+        private static List<SanctumCombatantSnapshot> ApplyKParserBridgePetOwnership(
+            IList<SanctumCombatantSnapshot> rows,
+            KPDatabaseDataSet dataSet,
+            string combatantScope,
+            string displayMode,
+            string groupMode,
+            double durationSeconds)
+        {
+            List<SanctumCombatantSnapshot> petRows = rows
+                .Where(row => string.Equals(
+                    row.CombatantType,
+                    EntityType.Pet.ToString(),
+                    StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            List<SanctumCombatantSnapshot> result = rows
+                .Where(row => petRows.Contains(row) == false)
+                .ToList();
+
+            if (combatantScope == "pets")
+            {
+                foreach (SanctumCombatantSnapshot petRow in petRows)
+                {
+                    string ownerName;
+                    if (KParserBridgePetMappings.TryResolveOwner(petRow.Name, out ownerName))
+                    {
+                        petRow.Name = petRow.Name + " (" + ownerName + ")";
+                        if (petRow.Key.IndexOf('|') < 0)
+                            petRow.Job = "Pet of " + ownerName;
+                    }
+                }
+                return petRows;
+            }
+
+            if (combatantScope == "players")
+                return result;
+
+            foreach (SanctumCombatantSnapshot petRow in petRows)
+            {
+                string ownerName;
+                if (KParserBridgePetMappings.TryResolveOwner(petRow.Name, out ownerName) == false)
+                {
+                    result.Add(petRow);
+                    continue;
+                }
+
+                List<KPDatabaseDataSet.CombatantsRow> owners = dataSet.Combatants
+                    .Where(combatant =>
+                        (EntityType)combatant.CombatantType == EntityType.Player &&
+                        string.Equals(
+                            combatant.CombatantName,
+                            ownerName,
+                            StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (owners.Count != 1)
+                {
+                    result.Add(petRow);
+                    continue;
+                }
+
+                KPDatabaseDataSet.CombatantsRow owner = owners[0];
+                SanctumCombatantSnapshot ownerRow = result.FirstOrDefault(row =>
+                    string.Equals(
+                        row.CombatantType,
+                        EntityType.Player.ToString(),
+                        StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(row.Name, owner.CombatantName, StringComparison.OrdinalIgnoreCase) &&
+                    (groupMode != "action" || string.Equals(row.Job, petRow.Job, StringComparison.Ordinal)));
+                if (ownerRow == null)
+                {
+                    ownerRow = CreateCombatant(owner, EntityType.Player);
+                    if (groupMode == "action")
+                    {
+                        ownerRow.Key = ownerRow.Key + "|" + (petRow.Job ?? string.Empty);
+                        ownerRow.Job = petRow.Job;
+                    }
+                    result.Add(ownerRow);
+                }
+
+                MergeSanctumPetDamage(
+                    ownerRow,
+                    petRow,
+                    displayMode,
+                    groupMode,
+                    durationSeconds);
+            }
+
+            return result;
+        }
+
         private static KPDatabaseDataSet.CombatantsRow ResolveSanctumPetOwner(
             KPDatabaseDataSet dataSet,
             string ownerReference)
@@ -4788,6 +4898,8 @@ namespace WaywardGamers.KParser.Bridge
             switch (report)
             {
                 case "damageDealt":
+                    if (mode == "dots" && ServerCompatibility.SupportsCalculatedDots == false)
+                        return "sources";
                     return mode == "accuracy" || mode == "sources" ||
                            mode == "melee" || mode == "ranged" ||
                            mode == "weaponskills" || mode == "abilities" ||

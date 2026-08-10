@@ -939,7 +939,7 @@ namespace WaywardGamers.KParser.Monitoring
             }
 
             throw new InvalidOperationException(
-                "Unable to locate Sanctum chat memory. Log fully into a character, then use " +
+                "Unable to locate FFXI chat memory. Log fully into a character, then use " +
                 "Detect in Options. If detection still fails, this client build may require " +
                 "an updated chat signature.", configuredOffsetError);
         }

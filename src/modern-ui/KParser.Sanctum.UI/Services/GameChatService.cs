@@ -82,6 +82,7 @@ internal static class GameChatService
             {
                 var name = process.ProcessName;
                 if (name.Equals("xiloader", StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals("horizon-loader", StringComparison.OrdinalIgnoreCase) ||
                     name.Equals("pol", StringComparison.OrdinalIgnoreCase) ||
                     name.Equals("ffximain", StringComparison.OrdinalIgnoreCase))
                 {

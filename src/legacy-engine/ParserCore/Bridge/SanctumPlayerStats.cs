@@ -143,7 +143,7 @@ namespace WaywardGamers.KParser.Bridge
             if (processes == null || processes.Length == 0)
             {
                 throw new InvalidOperationException(
-                    "No accessible FFXI client was found. Log into Sanctum and run both applications at the same privilege.");
+                    "No accessible FFXI client was found. Log fully into the selected server and run both applications at the same privilege.");
             }
 
             List<SanctumPlayerStatProfile> captured =

@@ -2,6 +2,7 @@
 using System.Text;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using WaywardGamers.KParser.Bridge;
 
 namespace WaywardGamers.KParser.Parsing
 {
@@ -41,10 +42,16 @@ namespace WaywardGamers.KParser.Parsing
 
             string sanctumPetName;
             string sanctumOwnerReference;
-            if (SanctumPetName.TryParse(
+            if (ServerCompatibility.IsSanctumXi && SanctumPetName.TryParse(
                 entityName,
                 out sanctumPetName,
                 out sanctumOwnerReference))
+            {
+                return EntityType.Pet;
+            }
+
+            if (ServerCompatibility.IsSanctumXi == false &&
+                KParserBridgePetMappings.IsMappedPet(entityName))
             {
                 return EntityType.Pet;
             }

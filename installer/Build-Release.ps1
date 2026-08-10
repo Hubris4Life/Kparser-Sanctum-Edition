@@ -5,7 +5,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$artifactRoot = Join-Path $repoRoot 'artifacts\v0.23.0-preview'
+$artifactRoot = Join-Path $repoRoot 'artifacts\v0.24.0-preview'
 $payloadRoot = Join-Path $PSScriptRoot 'payload\current'
 $engineRoot = Join-Path $payloadRoot 'Engine'
 $installerOutput = Join-Path $PSScriptRoot 'output'
@@ -13,8 +13,8 @@ $modernProject = Join-Path $repoRoot 'src\modern-ui\KParser.Sanctum.UI\KParser.S
 $legacySolution = Join-Path $repoRoot 'src\legacy-engine\FFXILogParser.sln'
 $legacyOutput = Join-Path $repoRoot 'src\legacy-engine\FFXILogParser\bin\x86\Release'
 $engineArchive = Join-Path $repoRoot 'src\modern-ui\KParser.Sanctum.UI\Assets\EnginePayload.zip'
-$sanctumChatRoot = Join-Path $repoRoot 'addons\sanctumchat'
-$sanctumChatEntry = Join-Path $sanctumChatRoot 'sanctumchat.lua'
+$kParserBridgeRoot = Join-Path $repoRoot 'addons\kparserbridge'
+$kParserBridgeEntry = Join-Path $kParserBridgeRoot 'kparserbridge.lua'
 $sqlCePrivateX86 = 'C:\Program Files\Microsoft SQL Server Compact Edition\v4.0\Private\x86'
 
 function Assert-PathWithinRepo([string] $path)
@@ -104,30 +104,30 @@ function Stage-ReleaseDocuments([string] $destination)
 
 function Stage-OptionalAddons([string] $destination)
 {
-    $addonDestination = Join-Path $destination 'Addons\sanctumchat'
-    Copy-DirectoryContents $sanctumChatRoot $addonDestination
+    $addonDestination = Join-Path $destination 'Addons\kparserbridge'
+    Copy-DirectoryContents $kParserBridgeRoot $addonDestination
 
-    foreach ($requiredFile in @('sanctumchat.lua', 'README.md'))
+    foreach ($requiredFile in @('kparserbridge.lua', 'README.md'))
     {
         if (-not (Test-Path -LiteralPath (Join-Path $addonDestination $requiredFile)))
         {
-            throw "The staged SanctumChat addon is missing $requiredFile."
+            throw "The staged KParserBridge addon is missing $requiredFile."
         }
     }
 }
 
-function Get-SanctumChatVersion
+function Get-KParserBridgeVersion
 {
-    if (-not (Test-Path -LiteralPath $sanctumChatEntry))
+    if (-not (Test-Path -LiteralPath $kParserBridgeEntry))
     {
-        throw 'The SanctumChat addon entry file was not found.'
+        throw 'The KParserBridge addon entry file was not found.'
     }
 
-    $source = Get-Content -LiteralPath $sanctumChatEntry -Raw
+    $source = Get-Content -LiteralPath $kParserBridgeEntry -Raw
     $match = [regex]::Match($source, 'addon\.version\s*=\s*[''\"](?<version>[^''\"]+)[''\"]')
     if (-not $match.Success)
     {
-        throw 'The SanctumChat addon version could not be read.'
+        throw 'The KParserBridge addon version could not be read.'
     }
 
     return $match.Groups['version'].Value
@@ -205,8 +205,8 @@ if ($LASTEXITCODE -ne 0)
     throw "Inno Setup failed with exit code $LASTEXITCODE."
 }
 
-$setupSource = Join-Path $installerOutput 'KParser-Sanctum-Setup-Preview-23.exe'
-$setupAsset = Join-Path $artifactRoot 'KParser-Sanctum-Setup-Preview-23.exe'
+$setupSource = Join-Path $installerOutput 'KParser-Sanctum-Setup-Preview-24.exe'
+$setupAsset = Join-Path $artifactRoot 'KParser-Sanctum-Setup-Preview-24.exe'
 Copy-Item -LiteralPath $setupSource -Destination $setupAsset -Force
 
 $portablePublish = Join-Path $artifactRoot 'portable-publish'
@@ -242,8 +242,8 @@ Copy-Item -LiteralPath (Join-Path $portablePublish 'KParser-Sanctum-Modern.exe')
 Stage-ReleaseDocuments $portablePackage
 Stage-OptionalAddons $portablePackage
 
-$portableAsset = Join-Path $artifactRoot 'KParser-Sanctum-Portable-Preview-23.zip'
-$portableCompactAsset = Join-Path $artifactRoot 'KParser-Sanctum-Portable-Preview-23.7z'
+$portableAsset = Join-Path $artifactRoot 'KParser-Sanctum-Portable-Preview-24.zip'
+$portableCompactAsset = Join-Path $artifactRoot 'KParser-Sanctum-Portable-Preview-24.7z'
 Push-Location $portablePackage
 try
 {
@@ -264,15 +264,15 @@ finally
     Pop-Location
 }
 
-$sanctumChatVersion = Get-SanctumChatVersion
-$sanctumChatAsset = Join-Path $artifactRoot ("SanctumChat-Ashita4-v{0}.zip" -f $sanctumChatVersion)
+$kParserBridgeVersion = Get-KParserBridgeVersion
+$kParserBridgeAsset = Join-Path $artifactRoot ("KParserBridge-Ashita4-v{0}.zip" -f $kParserBridgeVersion)
 Push-Location (Join-Path $repoRoot 'addons')
 try
 {
-    & $sevenZip a -tzip $sanctumChatAsset '.\sanctumchat' -mx=9 -mm=Deflate
+    & $sevenZip a -tzip $kParserBridgeAsset '.\kparserbridge' -mx=9 -mm=Deflate
     if ($LASTEXITCODE -ne 0)
     {
-        throw "SanctumChat ZIP creation failed with exit code $LASTEXITCODE."
+        throw "KParserBridge ZIP creation failed with exit code $LASTEXITCODE."
     }
 }
 finally
@@ -283,7 +283,7 @@ finally
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'RELEASE-NOTES.md') -Destination $artifactRoot -Force
 
 $checksumAsset = Join-Path $artifactRoot 'SHA256SUMS.txt'
-$checksumLines = @($setupAsset, $portableAsset, $portableCompactAsset, $sanctumChatAsset) | ForEach-Object {
+$checksumLines = @($setupAsset, $portableAsset, $portableCompactAsset, $kParserBridgeAsset) | ForEach-Object {
     $file = Get-Item -LiteralPath $_
     $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName
     '{0}  {1}' -f $hash.Hash.ToLowerInvariant(), $file.Name
@@ -293,5 +293,5 @@ $checksumLines | Set-Content -LiteralPath $checksumAsset -Encoding ascii
 Write-Host "SETUP=$setupAsset"
 Write-Host "PORTABLE=$portableAsset"
 Write-Host "PORTABLE_COMPACT=$portableCompactAsset"
-Write-Host "SANCTUMCHAT=$sanctumChatAsset"
+Write-Host "KPARSERBRIDGE=$kParserBridgeAsset"
 Write-Host "CHECKSUMS=$checksumAsset"
