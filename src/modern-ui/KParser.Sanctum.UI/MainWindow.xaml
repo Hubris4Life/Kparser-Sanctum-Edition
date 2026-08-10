@@ -522,6 +522,8 @@
                 <MenuItem Header="Tools" Padding="10,6">
                     <MenuItem Header="Live Monitor" Click="OpenCurrentFight_Click" />
                     <MenuItem Header="Player Build Comparison" Click="OpenPlayerComparison_Click" />
+                    <Separator />
+                    <MenuItem Header="SanctumChat Addon…" Click="ManageSanctumChat_Click" />
                 </MenuItem>
                 <MenuItem Header="Options" Padding="10,6">
                     <MenuItem Header="Player Information…" Click="PlayerInformation_Click" />

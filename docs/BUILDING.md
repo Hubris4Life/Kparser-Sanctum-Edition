@@ -40,6 +40,7 @@ The development run expects a compatible engine in the location handled by Engin
 ## Run available smoke projects
 
     dotnet run --project .\tests\PlayerComparisonSmoke\PlayerComparisonSmoke.csproj
+    dotnet run --project .\tests\SanctumChatInstallerSmoke\SanctumChatInstallerSmoke.csproj
 
 PortableSmoke requires two arguments: the published portable assembly path and a disposable extraction directory. Run it only after producing a portable build.
 
@@ -51,7 +52,7 @@ BridgeReportSmoke and StatCaptureProbe target the legacy framework and are diagn
 
 An installed self-contained dashboard can be produced with:
 
-    dotnet publish .\src\modern-ui\KParser.Sanctum.UI\KParser.Sanctum.UI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o .\artifacts\dashboard
+    dotnet publish .\src\modern-ui\KParser.Sanctum.UI\KParser.Sanctum.UI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=false -p:SatelliteResourceLanguages=en -o .\artifacts\dashboard
 
 Stage the complete tested engine and its required redistributable files under:
 
@@ -75,9 +76,14 @@ with Inno Setup 6. The script writes the installer to installer/output.
 
 The portable configuration embeds a zip named EnginePayload.zip as a managed resource. Create that zip from the same tested engine payload used by the setup release, place it temporarily under the modern project's Assets directory, and publish with the SanctumPortable property enabled.
 
-    dotnet publish .\src\modern-ui\KParser.Sanctum.UI\KParser.Sanctum.UI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:SanctumPortable=true -o .\artifacts\portable
+    dotnet publish .\src\modern-ui\KParser.Sanctum.UI\KParser.Sanctum.UI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:SanctumPortable=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=false -p:SatelliteResourceLanguages=en -o .\artifacts\portable
 
 Remove the generated EnginePayload.zip after publishing. It is intentionally ignored by Git.
+
+The release script creates both a standard ZIP and a smaller solid-compressed
+7z archive from the same portable payload. The 7z archive is the compact
+download; the ZIP remains available for broader built-in Windows extraction
+compatibility.
 
 ## Reproducibility requirement
 

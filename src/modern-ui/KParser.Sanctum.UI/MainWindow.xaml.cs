@@ -958,6 +958,24 @@ public partial class MainWindow : Window
         playerComparisonWindow.Show();
     }
 
+    private void ManageSanctumChat_Click(object sender, RoutedEventArgs e)
+    {
+        var installerWindow = new SanctumChatInstallerWindow(
+            new SanctumChatInstallerService(),
+            settings.SanctumChatAshitaRoot)
+        {
+            Owner = this
+        };
+        ThemeService.Apply(installerWindow, settings.IsLightMode);
+        installerWindow.ShowDialog();
+
+        if (!string.IsNullOrWhiteSpace(installerWindow.SelectedAshitaRoot))
+        {
+            settings.SanctumChatAshitaRoot = installerWindow.SelectedAshitaRoot;
+            settingsService.TrySave(settings, out _);
+        }
+    }
+
     private void ExportReport_Click(object sender, RoutedEventArgs e)
     {
         try

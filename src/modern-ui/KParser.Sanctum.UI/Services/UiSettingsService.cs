@@ -49,6 +49,7 @@ internal sealed class UiSettingsService
             settings.MainGroupMode ??= "player";
             settings.CurrentFightCombatantScope ??= "all";
             settings.CurrentFightView ??= "all";
+            settings.SanctumChatAshitaRoot ??= string.Empty;
             settings.CurrentFightBackgroundTransparencyPercent = Math.Clamp(
                 settings.CurrentFightBackgroundTransparencyPercent,
                 0,

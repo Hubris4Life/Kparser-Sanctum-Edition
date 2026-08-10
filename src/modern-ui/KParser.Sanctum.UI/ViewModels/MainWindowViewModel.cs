@@ -526,6 +526,7 @@ internal sealed class MainWindowViewModel : ObservableObject
                 {
                     "party" => "Party total",
                     "players" => "Player total",
+                    "pets" => "Pet total",
                     _ => "Alliance total"
                 };
         EventStatus = snapshot.Report == "chat"
@@ -983,9 +984,29 @@ internal sealed class MainWindowViewModel : ObservableObject
             }
             else
             {
-                CombatantScopes.Add(new ReportFilterOption { Key = "all", Label = "Entire alliance" });
-                CombatantScopes.Add(new ReportFilterOption { Key = "party", Label = "Party only" });
-                CombatantScopes.Add(new ReportFilterOption { Key = "players", Label = "Players only" });
+                CombatantScopes.Add(new ReportFilterOption
+                {
+                    Key = "all",
+                    Label = report == "damageDealt" ? "Alliance (pets attributed)" : "Entire alliance"
+                });
+                CombatantScopes.Add(new ReportFilterOption
+                {
+                    Key = "party",
+                    Label = report == "damageDealt" ? "Party (pets attributed)" : "Party only"
+                });
+                CombatantScopes.Add(new ReportFilterOption
+                {
+                    Key = "players",
+                    Label = report == "damageDealt" ? "Player damage only" : "Players only"
+                });
+                if (report == "damageDealt")
+                {
+                    CombatantScopes.Add(new ReportFilterOption
+                    {
+                        Key = "pets",
+                        Label = "Pet damage only"
+                    });
+                }
             }
 
             SelectedCombatantScope = CombatantScopes.FirstOrDefault(option => option.Key == previousKey)

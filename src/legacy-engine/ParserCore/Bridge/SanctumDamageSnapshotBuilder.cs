@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using WaywardGamers.KParser.Database;
 using WaywardGamers.KParser.Monitoring;
+using WaywardGamers.KParser.Parsing;
 using WaywardGamers.KParser.Utility;
 
 namespace WaywardGamers.KParser.Bridge
@@ -316,6 +317,17 @@ namespace WaywardGamers.KParser.Bridge
                 dataSet,
                 requestedSearchText,
                 excludeCommonDrops);
+
+            if (snapshot.Report == "damageDealt")
+            {
+                combatants = ApplySanctumPetOwnership(
+                    combatants,
+                    dataSet,
+                    snapshot.CombatantScope,
+                    snapshot.DisplayMode,
+                    snapshot.GroupMode,
+                    durationSeconds);
+            }
 
             long total = combatants.Sum(row => row.Damage);
             if ((snapshot.Report == "fights" || snapshot.Report == "experience") &&
@@ -2162,6 +2174,12 @@ namespace WaywardGamers.KParser.Bridge
                     row.Other = Math.Max(
                         categoryAmounts.Length > 0 ? categoryAmounts.Max() : 0,
                         actorDots.Count > 0 ? actorDots.Max(dot => dot.HighestPower) : 0);
+                    row.PhysicalAttempts = categoryEvents.Length;
+                    row.PhysicalHits = categoryAmounts.Length;
+                    row.PhysicalMisses = categoryEvents.Length - categoryAmounts.Length;
+                    row.CriticalHits = categoryEvents.Count(rowEvent =>
+                        GetDamageCategoryAmount(rowEvent, displayMode) > 0 &&
+                        (DamageModifier)rowEvent.DamageModifier == DamageModifier.Critical);
                 }
                 else
                 {
@@ -2241,6 +2259,12 @@ namespace WaywardGamers.KParser.Bridge
                         amounts.Length == 1 ? string.Empty : "s");
                     row.Accuracy = GetDamageCategorySuccessRate(actionEvents, displayMode);
                     row.CriticalRate = GetDamageCategoryCriticalRate(actionEvents, displayMode);
+                    row.PhysicalAttempts = actionEvents.Length;
+                    row.PhysicalHits = amounts.Length;
+                    row.PhysicalMisses = actionEvents.Length - amounts.Length;
+                    row.CriticalHits = actionEvents.Count(actionEvent =>
+                        GetDamageCategoryAmount(actionEvent, displayMode) > 0 &&
+                        (DamageModifier)actionEvent.DamageModifier == DamageModifier.Critical);
                     result.Add(row);
                 }
             }
@@ -3606,6 +3630,238 @@ namespace WaywardGamers.KParser.Bridge
             return row;
         }
 
+        private static List<SanctumCombatantSnapshot> ApplySanctumPetOwnership(
+            IList<SanctumCombatantSnapshot> rows,
+            KPDatabaseDataSet dataSet,
+            string combatantScope,
+            string displayMode,
+            string groupMode,
+            double durationSeconds)
+        {
+            List<SanctumCombatantSnapshot> result = rows
+                .Where(row => string.Equals(
+                    row.CombatantType,
+                    EntityType.Pet.ToString(),
+                    StringComparison.OrdinalIgnoreCase) == false)
+                .ToList();
+            List<SanctumCombatantSnapshot> petRows = rows
+                .Where(row => string.Equals(
+                    row.CombatantType,
+                    EntityType.Pet.ToString(),
+                    StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (combatantScope == "pets")
+            {
+                foreach (SanctumCombatantSnapshot petRow in petRows)
+                    ApplySanctumPetDisplayName(petRow, dataSet);
+                return petRows;
+            }
+
+            if (combatantScope == "players")
+                return result;
+
+            foreach (SanctumCombatantSnapshot petRow in petRows)
+            {
+                string petName;
+                string ownerReference;
+                if (SanctumPetName.TryParse(petRow.Name, out petName, out ownerReference) == false)
+                {
+                    result.Add(petRow);
+                    continue;
+                }
+
+                KPDatabaseDataSet.CombatantsRow owner = ResolveSanctumPetOwner(
+                    dataSet,
+                    ownerReference);
+                if (owner == null)
+                {
+                    result.Add(petRow);
+                    continue;
+                }
+
+                SanctumCombatantSnapshot ownerRow = result.FirstOrDefault(row =>
+                    string.Equals(
+                        row.CombatantType,
+                        EntityType.Player.ToString(),
+                        StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(row.Name, owner.CombatantName, StringComparison.OrdinalIgnoreCase) &&
+                    (groupMode != "action" || string.Equals(row.Job, petRow.Job, StringComparison.Ordinal)));
+                if (ownerRow == null)
+                {
+                    ownerRow = CreateCombatant(owner, EntityType.Player);
+                    if (groupMode == "action")
+                    {
+                        ownerRow.Key = ownerRow.Key + "|" + (petRow.Job ?? string.Empty);
+                        ownerRow.Job = petRow.Job;
+                    }
+                    result.Add(ownerRow);
+                }
+
+                MergeSanctumPetDamage(
+                    ownerRow,
+                    petRow,
+                    displayMode,
+                    groupMode,
+                    durationSeconds);
+            }
+
+            return result;
+        }
+
+        private static void ApplySanctumPetDisplayName(
+            SanctumCombatantSnapshot petRow,
+            KPDatabaseDataSet dataSet)
+        {
+            string petName;
+            string ownerReference;
+            if (SanctumPetName.TryParse(petRow.Name, out petName, out ownerReference) == false)
+                return;
+
+            KPDatabaseDataSet.CombatantsRow owner = ResolveSanctumPetOwner(dataSet, ownerReference);
+            petRow.Name = owner == null
+                ? petName + " (owner " + ownerReference + ")"
+                : petName + " (" + owner.CombatantName + ")";
+            if (owner != null && petRow.Key.IndexOf('|') < 0)
+                petRow.Job = "Pet of " + owner.CombatantName;
+        }
+
+        private static KPDatabaseDataSet.CombatantsRow ResolveSanctumPetOwner(
+            KPDatabaseDataSet dataSet,
+            string ownerReference)
+        {
+            List<KPDatabaseDataSet.CombatantsRow> players = dataSet.Combatants
+                .Where(combatant =>
+                    (EntityType)combatant.CombatantType == EntityType.Player)
+                .ToList();
+            List<KPDatabaseDataSet.CombatantsRow> exactMatches = players
+                .Where(combatant => string.Equals(
+                    combatant.CombatantName,
+                    ownerReference,
+                    StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (exactMatches.Count == 1)
+                return exactMatches[0];
+
+            if (SanctumPetName.LooksLikeOwnerToken(ownerReference) == false)
+                return null;
+
+            List<KPDatabaseDataSet.CombatantsRow> tokenMatches = players
+                .Where(combatant => string.Equals(
+                    SanctumPetName.GetOwnerToken(combatant.CombatantName),
+                    ownerReference,
+                    StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            return tokenMatches.Count == 1 ? tokenMatches[0] : null;
+        }
+
+        private static void MergeSanctumPetDamage(
+            SanctumCombatantSnapshot owner,
+            SanctumCombatantSnapshot pet,
+            string displayMode,
+            string groupMode,
+            double durationSeconds)
+        {
+            long ownerDamage = owner.Damage;
+            long ownerAttempts = owner.Melee;
+            long ownerDamaging = owner.WeaponSkills;
+            long ownerMaximum = owner.Other;
+
+            owner.Damage += pet.Damage;
+            owner.MeleeDamage += pet.MeleeDamage;
+            owner.WeaponSkillDamage += pet.WeaponSkillDamage;
+            owner.MagicDamage += pet.MagicDamage;
+            owner.Ranged += pet.Ranged;
+            owner.Abilities += pet.Abilities;
+            owner.Skillchains += pet.Skillchains;
+            owner.AdditionalEffects += pet.AdditionalEffects;
+            owner.Counters += pet.Counters;
+            owner.Retaliation += pet.Retaliation;
+            owner.Spikes += pet.Spikes;
+            owner.PhysicalAttempts += pet.PhysicalAttempts;
+            owner.PhysicalHits += pet.PhysicalHits;
+            owner.PhysicalMisses += pet.PhysicalMisses;
+            owner.CriticalHits += pet.CriticalHits;
+
+            if (displayMode == "multiattacks")
+            {
+                owner.Melee += pet.Melee;
+                owner.WeaponSkills += pet.WeaponSkills;
+                owner.Magic += pet.Magic;
+                owner.Other += pet.Other;
+                long multiRounds = owner.WeaponSkills + owner.Magic + owner.Other;
+                owner.Dps = owner.Damage == 0 ? 0.0 : (double)multiRounds * 100.0 / owner.Damage;
+                owner.RateText = owner.Dps.ToString("0.0", CultureInfo.InvariantCulture) + "%";
+            }
+            else if (displayMode == "dots")
+            {
+                owner.Melee += pet.Melee;
+                owner.WeaponSkills += pet.WeaponSkills;
+                owner.Magic = owner.WeaponSkills == 0
+                    ? 0
+                    : (long)Math.Round((double)owner.Damage / owner.WeaponSkills);
+                owner.Other += pet.Other;
+                owner.Dps = owner.Damage / Math.Max(1.0, durationSeconds);
+            }
+            else if (IsDamageCategoryDisplay(displayMode))
+            {
+                long attempts = ownerAttempts + pet.Melee;
+                long damaging = ownerDamaging + pet.WeaponSkills;
+                owner.Melee = attempts;
+                owner.WeaponSkills = damaging;
+                owner.Magic = damaging == 0
+                    ? 0
+                    : (long)Math.Round((double)owner.Damage / damaging);
+                owner.Other = Math.Max(ownerMaximum, pet.Other);
+                owner.Dps = groupMode == "action"
+                    ? (damaging == 0 ? 0.0 : (double)owner.Damage / damaging)
+                    : owner.Damage / Math.Max(1.0, durationSeconds);
+                owner.Accuracy = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Success rate: {0:0.0}%",
+                    owner.PhysicalAttempts == 0
+                        ? 0.0
+                        : (double)owner.PhysicalHits * 100.0 / owner.PhysicalAttempts);
+                owner.CriticalRate = displayMode == "melee" ||
+                                     displayMode == "ranged" ||
+                                     displayMode == "weaponskills"
+                    ? string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Critical rate: {0:0.0}%",
+                        owner.PhysicalHits == 0
+                            ? 0.0
+                            : (double)owner.CriticalHits * 100.0 / owner.PhysicalHits)
+                    : "Damaging actions: " + owner.PhysicalHits.ToString(
+                        "N0",
+                        CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                owner.Melee += pet.Melee;
+                owner.WeaponSkills += pet.WeaponSkills;
+                owner.Magic += pet.Magic;
+                owner.Other += pet.Other;
+                owner.Dps = owner.Damage / Math.Max(1.0, durationSeconds);
+                owner.Accuracy = owner.PhysicalAttempts == 0
+                    ? "Accuracy: -"
+                    : string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Accuracy: {0:0.0}%",
+                        (double)owner.PhysicalHits * 100.0 / owner.PhysicalAttempts);
+                owner.CriticalRate = owner.PhysicalHits == 0
+                    ? "Critical hit rate: -"
+                    : string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Critical hit rate: {0:0.0}%",
+                        (double)owner.CriticalHits * 100.0 / owner.PhysicalHits);
+            }
+
+            if (ownerDamage == 0)
+                owner.TopAction = pet.TopAction;
+            else if (owner.TopAction.IndexOf("pet damage included", StringComparison.OrdinalIgnoreCase) < 0)
+                owner.TopAction += " - pet damage included";
+        }
+
         private static void AddEncounterFilters(
             SanctumBridgeSnapshot snapshot,
             IList<KPDatabaseDataSet.BattlesRow> battles)
@@ -3710,18 +3966,32 @@ namespace WaywardGamers.KParser.Bridge
             snapshot.CombatantFilters.Add(new SanctumCombatantFilterSnapshot
             {
                 Key = "all",
-                Label = "Entire alliance"
+                Label = snapshot.Report == "damageDealt"
+                    ? "Alliance (pets attributed)"
+                    : "Entire alliance"
             });
             snapshot.CombatantFilters.Add(new SanctumCombatantFilterSnapshot
             {
                 Key = "party",
-                Label = "Party only"
+                Label = snapshot.Report == "damageDealt"
+                    ? "Party (pets attributed)"
+                    : "Party only"
             });
             snapshot.CombatantFilters.Add(new SanctumCombatantFilterSnapshot
             {
                 Key = "players",
-                Label = "Players only"
+                Label = snapshot.Report == "damageDealt"
+                    ? "Player damage only"
+                    : "Players only"
             });
+            if (snapshot.Report == "damageDealt")
+            {
+                snapshot.CombatantFilters.Add(new SanctumCombatantFilterSnapshot
+                {
+                    Key = "pets",
+                    Label = "Pet damage only"
+                });
+            }
         }
 
         private static bool HasPartyDamage(KPDatabaseDataSet.BattlesRow battle)
@@ -4504,7 +4774,9 @@ namespace WaywardGamers.KParser.Bridge
             {
                 return scope;
             }
-            return scope == "party" || scope == "players" ? scope : "all";
+            return scope == "party" || scope == "players" || scope == "pets"
+                ? scope
+                : "all";
         }
 
         private static string NormalizeDisplayMode(string report, string requestedMode)
@@ -4641,6 +4913,9 @@ namespace WaywardGamers.KParser.Bridge
         {
             if (scope == "players")
                 return entityType == EntityType.Player;
+
+            if (scope == "pets")
+                return entityType == EntityType.Pet;
 
             if (scope != "party")
                 return true;

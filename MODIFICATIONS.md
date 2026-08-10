@@ -15,6 +15,10 @@ The Sanctum Edition work includes:
 - A new .NET 10 WPF dashboard and compact live monitor
 - Damage, defense, healing, status, buff, experience, crafting, HELM, chat, drop, Corsair roll, multi-attack, and player-build reports
 - Server-rule DoT estimation and player-stat capture support
+- Sanctum server pet-owner name decoding with combined owner totals and separate pet-only filtering
+- Optional SanctumChat/Ashita pet-name expansion using authoritative server mappings
+- SanctumChat pet nameplate expansion and readable spacing for multiword pet names
+- Opt-in SanctumChat detection, installation, updating, and recoverable removal from the modern Tools menu
 - Installer and portable single-file packaging
 - Disabled the obsolete inherited Google AJAX translation key and no-key network path
 - Removed the unfinished inherited ZeroMQ PacketReader and migrated old Packet preferences to the supported RAM reader

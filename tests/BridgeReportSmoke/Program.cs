@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Threading;
 using WaywardGamers.KParser;
 using WaywardGamers.KParser.Bridge;
@@ -14,6 +15,13 @@ namespace BridgeReportSmoke
     {
         private static int Main(string[] args)
         {
+            if (args.Length == 1 && args[0] == "--pet-protocol-only")
+            {
+                VerifySanctumPetProtocol();
+                Console.WriteLine("sanctum-pet-protocol=verified");
+                return 0;
+            }
+
             bool auditMode = args.Length == 2 && args[0] == "--audit";
             if ((!auditMode && args.Length != 1) || (auditMode && args.Length != 2))
                 throw new ArgumentException("Expected a KParser database path.");
@@ -79,13 +87,295 @@ namespace BridgeReportSmoke
                 Console.WriteLine("chat-report=verified");
                 Console.WriteLine("loot-reports=verified");
                 Console.WriteLine("buff-uptime=verified");
-                Console.WriteLine("preview22-reports=verified");
+                Console.WriteLine("current-preview-reports=verified");
                 return 0;
             }
             finally
             {
                 DatabaseManager.Instance.CloseDatabase();
             }
+        }
+
+        private static void VerifySanctumPetProtocol()
+        {
+            Assembly parserCore = typeof(DatabaseManager).Assembly;
+            Type petNameType = parserCore.GetType(
+                "WaywardGamers.KParser.Parsing.SanctumPetName",
+                true);
+            MethodInfo getToken = petNameType.GetMethod(
+                "GetOwnerToken",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo tryParse = petNameType.GetMethod(
+                "TryParse",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Type classifier = parserCore.GetType(
+                "WaywardGamers.KParser.Parsing.ClassifyEntity",
+                true);
+            MethodInfo classify = classifier.GetMethod(
+                "ClassifyByName",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Type builder = parserCore.GetType(
+                "WaywardGamers.KParser.Bridge.SanctumDamageSnapshotBuilder",
+                true);
+            Type snapshotRowType = parserCore.GetType(
+                "WaywardGamers.KParser.Bridge.SanctumCombatantSnapshot",
+                true);
+            MethodInfo applyOwnership = builder.GetMethod(
+                "ApplySanctumPetOwnership",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            if (getToken == null || tryParse == null || classify == null ||
+                applyOwnership == null || snapshotRowType == null)
+            {
+                throw new MissingMemberException(
+                    "The Sanctum pet ownership protocol members could not be tested.");
+            }
+
+            string ownerName = "Nazgul";
+            string token = (string)getToken.Invoke(null, new object[] { ownerName });
+            if (token.Length != 5)
+                throw new InvalidOperationException("The owner token is not five characters.");
+
+            object[] parseArguments = { "Garuda@Nazgul", null, null };
+            bool parsed = (bool)tryParse.Invoke(null, parseArguments);
+            if (parsed == false || (string)parseArguments[1] != "Garuda" ||
+                (string)parseArguments[2] != ownerName)
+            {
+                throw new InvalidOperationException("A full Sanctum pet owner name was not decoded.");
+            }
+
+            object[] expandedArguments = { "Nazgul's Garuda", null, null };
+            if ((bool)tryParse.Invoke(null, expandedArguments) == false ||
+                (string)expandedArguments[1] != "Garuda" ||
+                (string)expandedArguments[2] != ownerName)
+            {
+                throw new InvalidOperationException(
+                    "A SanctumChat-expanded pet name was not decoded.");
+            }
+
+            object[] expandedMultiwordArguments = { "Nazgul's Fire Spirit", null, null };
+            if ((bool)tryParse.Invoke(null, expandedMultiwordArguments) == false ||
+                (string)expandedMultiwordArguments[1] != "Fire Spirit" ||
+                (string)expandedMultiwordArguments[2] != ownerName)
+            {
+                throw new InvalidOperationException(
+                    "A SanctumChat-expanded multiword pet name was not decoded.");
+            }
+
+            object[] spacedPetArguments = { "Cait Sith@" + token, null, null };
+            if ((bool)tryParse.Invoke(null, spacedPetArguments) == false ||
+                (string)spacedPetArguments[1] != "Cait Sith")
+            {
+                throw new InvalidOperationException(
+                    "A Sanctum pet name containing a space was not decoded.");
+            }
+
+            EntityType classification = (EntityType)classify.Invoke(
+                null,
+                new object[] { "Garuda@Nazgul" });
+            if (classification != EntityType.Pet)
+                throw new InvalidOperationException("A decorated Sanctum pet was not classified as a pet.");
+
+            EntityType expandedClassification = (EntityType)classify.Invoke(
+                null,
+                new object[] { "Nazgul's Garuda" });
+            if (expandedClassification != EntityType.Pet)
+            {
+                throw new InvalidOperationException(
+                    "A SanctumChat-expanded pet was not classified as a pet.");
+            }
+
+            Type parseExpressions = parserCore.GetType(
+                "WaywardGamers.KParser.ParseExpressions",
+                true);
+            FieldInfo meleeHitField = parseExpressions.GetField(
+                "MeleeHit",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Regex meleeHit = meleeHitField == null
+                ? null
+                : meleeHitField.GetValue(null) as Regex;
+            Match meleeMatch = meleeHit == null
+                ? Match.Empty
+                : meleeHit.Match("Garuda@Nazgul hits Shinryu for 300 points of damage.");
+            if (meleeMatch.Success == false || meleeMatch.Groups["name"].Value != "Garuda@Nazgul")
+            {
+                throw new InvalidOperationException(
+                    "The legacy combat expressions did not retain the decorated pet name.");
+            }
+
+            Match expandedMeleeMatch = meleeHit.Match(
+                "Nazgul's Garuda hits Shinryu for 300 points of damage.");
+            if (expandedMeleeMatch.Success == false ||
+                expandedMeleeMatch.Groups["name"].Value != "Nazgul's Garuda")
+            {
+                throw new InvalidOperationException(
+                    "The legacy combat expressions did not retain a SanctumChat-expanded pet name.");
+            }
+
+            Match expandedMultiwordMeleeMatch = meleeHit.Match(
+                "Nazgul's Fire Spirit hits Shinryu for 300 points of damage.");
+            if (expandedMultiwordMeleeMatch.Success == false ||
+                expandedMultiwordMeleeMatch.Groups["name"].Value != "Nazgul's Fire Spirit")
+            {
+                throw new InvalidOperationException(
+                    "The legacy combat expressions did not retain an expanded multiword pet name.");
+            }
+
+            Match spacedPetMeleeMatch = meleeHit.Match(
+                "Cait Sith@" + token + " hits Shinryu for 300 points of damage.");
+            if (spacedPetMeleeMatch.Success == false ||
+                spacedPetMeleeMatch.Groups["name"].Value != "Cait Sith@" + token)
+            {
+                throw new InvalidOperationException(
+                    "The legacy combat expressions did not retain a spaced pet name.");
+            }
+
+            KPDatabaseDataSet dataSet = new KPDatabaseDataSet();
+            dataSet.Combatants.AddCombatantsRow(ownerName, (byte)EntityType.Player, string.Empty);
+
+            IList combinedInput = CreatePetOwnershipRows(
+                snapshotRowType,
+                "CourierCa@" + token);
+            IList combined = (IList)applyOwnership.Invoke(
+                null,
+                new object[] { combinedInput, dataSet, "all", "sources", "player", 10.0 });
+            if (combined.Count != 1 ||
+                (string)GetSnapshotValue(combined[0], "Name") != ownerName ||
+                (long)GetSnapshotValue(combined[0], "Damage") != 1000L)
+            {
+                throw new InvalidOperationException(
+                    "Pet damage was not attributed once to its owner.");
+            }
+
+            IList actionInput = CreatePetOwnershipRows(
+                snapshotRowType,
+                "Garuda@Nazgul");
+            foreach (object actionRow in actionInput)
+            {
+                SetSnapshotValue(
+                    actionRow,
+                    "Key",
+                    (string)GetSnapshotValue(actionRow, "Key") + "|Fire IV");
+                SetSnapshotValue(actionRow, "Job", "Fire IV");
+                SetSnapshotValue(actionRow, "Melee", 1L);
+                SetSnapshotValue(actionRow, "WeaponSkills", 1L);
+                SetSnapshotValue(actionRow, "Magic", (long)GetSnapshotValue(actionRow, "Damage"));
+                SetSnapshotValue(actionRow, "Other", (long)GetSnapshotValue(actionRow, "Damage"));
+            }
+            IList actionCombined = (IList)applyOwnership.Invoke(
+                null,
+                new object[] { actionInput, dataSet, "all", "magic", "action", 10.0 });
+            if (actionCombined.Count != 1 ||
+                (long)GetSnapshotValue(actionCombined[0], "Damage") != 1000L ||
+                (long)GetSnapshotValue(actionCombined[0], "Melee") != 2L ||
+                (string)GetSnapshotValue(actionCombined[0], "Job") != "Fire IV")
+            {
+                throw new InvalidOperationException(
+                    "The action-grouped pet contribution was not merged correctly.");
+            }
+
+            IList playerOnlyInput = CreatePetOwnershipRows(
+                snapshotRowType,
+                "Garuda@Nazgul");
+            IList playerOnly = (IList)applyOwnership.Invoke(
+                null,
+                new object[] { playerOnlyInput, dataSet, "players", "sources", "player", 10.0 });
+            if (playerOnly.Count != 1 ||
+                (long)GetSnapshotValue(playerOnly[0], "Damage") != 700L)
+            {
+                throw new InvalidOperationException(
+                    "The player-only filter included pet damage.");
+            }
+
+            IList petOnlyInput = CreatePetOwnershipRows(
+                snapshotRowType,
+                "Garuda@Nazgul");
+            IList petOnly = (IList)applyOwnership.Invoke(
+                null,
+                new object[] { petOnlyInput, dataSet, "pets", "sources", "player", 10.0 });
+            if (petOnly.Count != 1 ||
+                (string)GetSnapshotValue(petOnly[0], "Name") != "Garuda (Nazgul)" ||
+                (long)GetSnapshotValue(petOnly[0], "Damage") != 300L)
+            {
+                throw new InvalidOperationException(
+                    "The pet-only filter did not preserve the raw pet contribution.");
+            }
+
+            IList expandedPetInput = CreatePetOwnershipRows(
+                snapshotRowType,
+                "Nazgul's Garuda");
+            IList expandedPetCombined = (IList)applyOwnership.Invoke(
+                null,
+                new object[] { expandedPetInput, dataSet, "all", "sources", "player", 10.0 });
+            if (expandedPetCombined.Count != 1 ||
+                (string)GetSnapshotValue(expandedPetCombined[0], "Name") != ownerName ||
+                (long)GetSnapshotValue(expandedPetCombined[0], "Damage") != 1000L)
+            {
+                throw new InvalidOperationException(
+                    "SanctumChat-expanded pet damage was not attributed to its owner.");
+            }
+
+            IList unresolvedInput = CreatePetOwnershipRows(
+                snapshotRowType,
+                "Garuda@00000");
+            IList unresolved = (IList)applyOwnership.Invoke(
+                null,
+                new object[] { unresolvedInput, dataSet, "all", "sources", "player", 10.0 });
+            long unresolvedTotal = 0;
+            foreach (object unresolvedRow in unresolved)
+                unresolvedTotal += (long)GetSnapshotValue(unresolvedRow, "Damage");
+            if (unresolved.Count != 2 || unresolvedTotal != 1000L)
+            {
+                throw new InvalidOperationException(
+                    "An unresolved owner tag changed or discarded pet damage.");
+            }
+        }
+
+        private static IList CreatePetOwnershipRows(Type snapshotRowType, string petName)
+        {
+            Type listType = typeof(List<>).MakeGenericType(snapshotRowType);
+            IList rows = (IList)Activator.CreateInstance(listType);
+            object player = Activator.CreateInstance(snapshotRowType, true);
+            SetSnapshotValue(player, "Key", "1");
+            SetSnapshotValue(player, "Name", "Nazgul");
+            SetSnapshotValue(player, "Job", "SMN");
+            SetSnapshotValue(player, "CombatantType", EntityType.Player.ToString());
+            SetSnapshotValue(player, "Damage", 700L);
+            SetSnapshotValue(player, "Melee", 500L);
+            SetSnapshotValue(player, "WeaponSkills", 100L);
+            SetSnapshotValue(player, "Magic", 100L);
+            SetSnapshotValue(player, "PhysicalAttempts", 10L);
+            SetSnapshotValue(player, "PhysicalHits", 9L);
+            SetSnapshotValue(player, "PhysicalMisses", 1L);
+            SetSnapshotValue(player, "CriticalHits", 2L);
+            SetSnapshotValue(player, "TopAction", "Top action: Predator Claws");
+
+            object pet = Activator.CreateInstance(snapshotRowType, true);
+            SetSnapshotValue(pet, "Key", "2");
+            SetSnapshotValue(pet, "Name", petName);
+            SetSnapshotValue(pet, "Job", "Pet");
+            SetSnapshotValue(pet, "CombatantType", EntityType.Pet.ToString());
+            SetSnapshotValue(pet, "Damage", 300L);
+            SetSnapshotValue(pet, "Melee", 200L);
+            SetSnapshotValue(pet, "WeaponSkills", 100L);
+            SetSnapshotValue(pet, "PhysicalAttempts", 5L);
+            SetSnapshotValue(pet, "PhysicalHits", 4L);
+            SetSnapshotValue(pet, "PhysicalMisses", 1L);
+            SetSnapshotValue(pet, "CriticalHits", 1L);
+            SetSnapshotValue(pet, "TopAction", "Top action: Burning Strike");
+
+            rows.Add(player);
+            rows.Add(pet);
+            return rows;
+        }
+
+        private static object GetSnapshotValue(object row, string propertyName)
+        {
+            return row.GetType().GetProperty(propertyName).GetValue(row, null);
+        }
+
+        private static void SetSnapshotValue(object row, string propertyName, object value)
+        {
+            row.GetType().GetProperty(propertyName).SetValue(row, value, null);
         }
 
         private static void VerifyRamReaderStopsBeforeReturning()
@@ -481,7 +771,7 @@ namespace BridgeReportSmoke
                     string.IsNullOrEmpty(error) == false)
                 {
                     throw new InvalidOperationException(
-                        "Preview 22 report failed metadata/runtime verification: " + item[0] + "/" + item[1] +
+                        "Current preview report failed metadata/runtime verification: " + item[0] + "/" + item[1] +
                         (string.IsNullOrEmpty(error) ? string.Empty : " - " + error));
                 }
             }

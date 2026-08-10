@@ -39,6 +39,16 @@ namespace WaywardGamers.KParser.Parsing
                 return EntityType.Unknown;
             }
 
+            string sanctumPetName;
+            string sanctumOwnerReference;
+            if (SanctumPetName.TryParse(
+                entityName,
+                out sanctumPetName,
+                out sanctumOwnerReference))
+            {
+                return EntityType.Pet;
+            }
+
             // Check if we already have this name in the entity list.  If so, use that.
             List<EntityType> entityTypeList = EntityManager.Instance.LookupEntity(entityName);
 

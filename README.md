@@ -8,7 +8,7 @@ This project is a modified derivative of KParser, originally created by David Sm
 
 ## Project status
 
-The current development release is **Preview 22**, assembly version **0.22.0**. It is usable on Sanctum but should still be treated as preview software. Memory layouts, private-server client builds, and combat-log behavior can change.
+The current development release is **Preview 23**, assembly version **0.23.0**. It is usable on Sanctum but should still be treated as preview software. Memory layouts, private-server client builds, and combat-log behavior can change.
 
 Official Setup and Portable packages are published on the [GitHub Releases page](https://github.com/Hubris4Life/Kparser-Sanctum-Edition/releases). The repository itself intentionally contains source rather than compiled application builds.
 
@@ -24,6 +24,8 @@ Official Setup and Portable packages are published on the [GitHub Releases page]
 - CSV export and party-chat summary support
 - Named player parse snapshots and side-by-side build comparisons
 - Local player-information labels and notes
+- SanctumChat-aware pet ownership, owner-attributed totals, and separate player/pet damage filters
+- Opt-in SanctumChat Ashita v4 installer with detected and manually selected locations
 - Dark and light interface themes
 
 ## How it works
@@ -55,6 +57,7 @@ Repository owners should also read [Publishing this folder on GitHub](docs/GITHU
     src/legacy-engine/   Modified GPL KParser engine and plugins
     tests/               Bridge, portable-package, comparison, and memory probes
     installer/           Inno Setup definition; generated payload is excluded
+    addons/sanctumchat/  Optional Sanctum Ashita v4 chat integration
     docs/                Architecture, privacy, history, release, and license notes
     assets/              Repository images
 

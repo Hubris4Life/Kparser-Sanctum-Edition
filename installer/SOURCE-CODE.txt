@@ -1,9 +1,9 @@
-KParser - Sanctum Edition Preview 22 corresponding source
+KParser - Sanctum Edition Preview 23 corresponding source
 
 Repository:
 https://github.com/Hubris4Life/Kparser-Sanctum-Edition
 
 Release tag:
-https://github.com/Hubris4Life/Kparser-Sanctum-Edition/releases/tag/v0.22.0-preview
+https://github.com/Hubris4Life/Kparser-Sanctum-Edition/releases/tag/v0.23.0-preview
 
 The release tag and GitHub-generated source archives are the corresponding source for the Sanctum Edition application. Matching ZedGraph 5.1.5 source is included under Licenses/ZedGraph-5.1.5.

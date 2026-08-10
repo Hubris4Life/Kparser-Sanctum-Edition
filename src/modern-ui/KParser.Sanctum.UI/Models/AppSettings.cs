@@ -34,6 +34,7 @@ internal sealed class AppSettings
     public bool CurrentFightOpen { get; set; }
     public bool AutoDetectMemoryOnStartup { get; set; }
     public bool IsLightMode { get; set; }
+    public string SanctumChatAshitaRoot { get; set; } = string.Empty;
 }
 
 internal sealed class WindowPlacementSettings

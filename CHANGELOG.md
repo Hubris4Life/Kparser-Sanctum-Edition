@@ -4,8 +4,23 @@ All notable public changes should be documented here. Preview entries describe d
 
 ## Unreleased
 
-- Repository documentation, licensing, privacy, security, and release guidance prepared for public source distribution.
-- Removed the unused inherited ZeroMQ packet-reader dependency from public builds.
+## Preview 23 - 0.23.0 - 2026
+
+### Added
+
+- Added Sanctum server pet-owner names, owner-attributed damage totals, and separate direct-player and pet-only damage filters.
+- Added the optional Ashita v4 `sanctumchat` addon prototype, authoritative server pet mappings, and `Owner's Pet` parser support.
+- Added Tools > SanctumChat Addon for opt-in Ashita v4 detection, installation, updating, and recoverable removal.
+- Bundled the matching SanctumChat addon in both setup and portable release packages.
+
+### Refined
+
+- Expanded SanctumChat pet nameplates locally, matched readable possessive names between nameplates and combat chat, and restored spaces in CamelCase pet names.
+- Removed SanctumChat's 30-second polling, made registration event-driven, and discarded stale aliases when a pet entity is reused.
+- Increased readable pet nameplates to 27 characters, added nickname-preserving abbreviations for longer combinations, and restored full pet names in combat chat.
+- Restored the tested-safe 23-character nameplate limit and replaced raw truncation with conventional initials while retaining full chat names.
+- Raised the experimental nameplate limit to 25 characters and changed overflow formatting to descriptor initials plus the complete Beastmaster pet nickname.
+- Added automated coverage for pet parsing, owner attribution, addon location detection, safe updates, and recoverable removal.
 
 ## Preview 22 - 0.22.0 - 2026
 
@@ -25,6 +40,8 @@ All notable public changes should be documented here. Preview entries describe d
 - Crafting, chat, item-drop, export, theme, DoT, live-monitor, and saved-build features
 - Compact live monitor and one-second live refresh
 - Player snapshots and side-by-side build comparisons
+- Repository documentation, licensing, privacy, security, and release guidance prepared for public source distribution
+- Removed the unused inherited ZeroMQ packet-reader dependency from public builds
 
 ## Development previews 1-21 - 2026
 

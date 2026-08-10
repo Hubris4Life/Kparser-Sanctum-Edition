@@ -17,15 +17,27 @@ The setup edition installs for the current Windows user and creates a normal uni
 
 ## Portable edition
 
-1. Download the portable executable from the same tagged release.
-2. Place it in a user-writable folder.
-3. Run it directly.
+1. Download the portable ZIP or 7z archive from the same tagged release.
+2. Extract the complete archive into a user-writable folder.
+3. Run `KParser-Sanctum-Modern.exe` from the extracted folder.
 
 The portable application extracts its matching engine below:
 
     %LOCALAPPDATA%\KParser Sanctum Modern\PortableEngine
 
 Do not replace extracted engine files with files from another release.
+
+## Optional SanctumChat addon
+
+Preview 23 includes the matching SanctumChat Ashita v4 addon but does not install or load it automatically.
+
+1. Open **Tools > SanctumChat Addon** in KParser.
+2. Select a detected Ashita v4 installation, or click **Browse** and select its main folder or `addons` folder.
+3. Click **Install / Update**.
+4. In game, run `/addon load sanctumchat`.
+5. Run `/sanctumchat status` and confirm that the addon is registered with the Sanctum server.
+
+When updating an existing copy, KParser preserves the previous addon folder beside it as a timestamped backup. Remove also renames and preserves the installed folder instead of deleting it. The addon is Sanctum-specific and should not be enabled on unrelated servers.
 
 ## Basic operation
 

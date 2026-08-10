@@ -194,6 +194,7 @@
     <Compile Include="Parsing\MessageDetail\TargetDetails.cs" />
     <Compile Include="Parsing\MessageLine.cs" />
     <Compile Include="Parsing\Parsing\ClassifyEntity.cs" />
+    <Compile Include="Parsing\Parsing\SanctumPetName.cs" />
     <Compile Include="Parsing\Parsing\ParseCodes.cs" />
     <Compile Include="Parsing\Message.cs" />
     <Compile Include="Parsing\Parsing\Parser.cs" />

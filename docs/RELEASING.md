@@ -15,10 +15,10 @@ Do not publish a setup or portable executable until every item below is complete
 
 ## Versioning
 
-Preview 22 currently uses:
+Preview 23 currently uses:
 
-    Product version: 0.22.0
-    Display version: Preview 22
+    Product version: 0.23.0
+    Display version: Preview 23
 
 For stable public releases, prefer semantic tags such as v1.0.0. Every binary asset must identify the same version.
 
@@ -37,11 +37,18 @@ For stable public releases, prefer semantic tags such as v1.0.0. Every binary as
 A GitHub release should include:
 
 - Setup executable
-- Portable executable, when offered
+- Portable ZIP, when offered
+- Compact portable 7z archive, when offered
+- Standalone versioned SanctumChat ZIP
 - SHA-256 checksum file
 - Release notes and known limitations
 - Direct link to the matching source tag
 - GPL license and third-party notices within each distribution
+
+The ZIP and 7z portable assets must contain the same executable and notices.
+The dashboard must be published with native libraries embedded; an EXE that
+depends on WPF DLLs left beside the publish directory is not a complete
+single-file release.
 
 Do not attach a parse database or generated EnginePayload.zip as a source archive.
 
@@ -55,6 +62,7 @@ At minimum, verify:
 - Live monitor one-second refresh and compact mode
 - Damage, defense, healing, buff, debuff, EXP, HELM, crafting, chat, and drop reports
 - Player jobs, accuracy, share, multi-attacks, rolls, DoTs, and build comparisons
+- SanctumChat installation/update/removal, pet-owner attribution, and player-only/pet-only damage filters
 - Dark and light themes
 - CSV export and party-summary fallback
 - Data cleanup on a fresh application launch
