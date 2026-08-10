@@ -269,7 +269,7 @@ $sanctumChatAsset = Join-Path $artifactRoot ("SanctumChat-Ashita4-v{0}.zip" -f $
 Push-Location (Join-Path $repoRoot 'addons')
 try
 {
-    & $sevenZip a -tzip $sanctumChatAsset '.\sanctumchat\*' -mx=9 -mm=Deflate
+    & $sevenZip a -tzip $sanctumChatAsset '.\sanctumchat' -mx=9 -mm=Deflate
     if ($LASTEXITCODE -ne 0)
     {
         throw "SanctumChat ZIP creation failed with exit code $LASTEXITCODE."
