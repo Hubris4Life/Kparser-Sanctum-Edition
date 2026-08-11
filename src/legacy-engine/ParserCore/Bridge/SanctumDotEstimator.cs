@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using WaywardGamers.KParser.Database;
+using WaywardGamers.KParser.Parsing;
 
 namespace WaywardGamers.KParser.Bridge
 {
@@ -48,8 +49,20 @@ namespace WaywardGamers.KParser.Bridge
                 }
 
                 string actionName = GetActionName(row);
+                string normalizedActionName = NormalizeActionName(actionName);
+                string statePrefix = row.BattleID.ToString(CultureInfo.InvariantCulture) + "|" +
+                                     row.TargetID.ToString(CultureInfo.InvariantCulture) + "|";
+                if (TryCancelActiveEffect(
+                    row,
+                    normalizedActionName,
+                    statePrefix,
+                    active))
+                {
+                    continue;
+                }
+
                 DotRule rule;
-                if (Rules.TryGetValue(NormalizeActionName(actionName), out rule) == false ||
+                if (Rules.TryGetValue(normalizedActionName, out rule) == false ||
                     IsSuccessfulApplication(row, rule) == false)
                 {
                     continue;
@@ -60,15 +73,22 @@ namespace WaywardGamers.KParser.Bridge
                 if (power <= 0)
                     continue;
 
+                bool usedCapturedDuration;
+                int durationSeconds = ResolveDurationSeconds(
+                    row,
+                    rule,
+                    out usedCapturedDuration);
+                usedCapturedStats = usedCapturedStats || usedCapturedDuration;
+                if (durationSeconds <= 0)
+                    continue;
+
                 DateTime start = AsUtc(row.Timestamp);
                 DateTime battleEnd = battleEnds[row.BattleID];
-                DateTime naturalEnd = start.AddSeconds(rule.DurationSeconds);
+                DateTime naturalEnd = start.AddSeconds(durationSeconds);
                 DateTime end = naturalEnd < battleEnd ? naturalEnd : battleEnd;
                 if (end <= start)
                     continue;
 
-                string statePrefix = row.BattleID.ToString(CultureInfo.InvariantCulture) + "|" +
-                                     row.TargetID.ToString(CultureInfo.InvariantCulture) + "|";
                 string stateKey = statePrefix + rule.EffectKey;
                 DotApplication existing;
                 if (TryGetActive(active, stateKey, start, out existing))
@@ -164,6 +184,34 @@ namespace WaywardGamers.KParser.Bridge
                    row.CombatantsRowByActorCombatantRelation != null;
         }
 
+        private static bool TryCancelActiveEffect(
+            KPDatabaseDataSet.InteractionsRow row,
+            string normalizedActionName,
+            string statePrefix,
+            IDictionary<string, DotApplication> active)
+        {
+            if (normalizedActionName != "modus veritas" ||
+                (FailedActionType)row.FailedActionType != FailedActionType.None ||
+                (DefenseType)row.DefenseType == DefenseType.Absorb ||
+                (DefenseType)row.DefenseType == DefenseType.Resist ||
+                GetDirectDamage(row) <= 0)
+            {
+                return false;
+            }
+
+            string stateKey = statePrefix + "helix";
+            DotApplication application;
+            if (TryGetActive(active, stateKey, AsUtc(row.Timestamp), out application))
+            {
+                application.End = AsUtc(row.Timestamp);
+                active.Remove(stateKey);
+            }
+
+            // Modus Veritas damage is already present in the parsed log. The
+            // estimator only needs to stop the consumed Helix at this timestamp.
+            return true;
+        }
+
         private static bool IsSuccessfulApplication(
             KPDatabaseDataSet.InteractionsRow row,
             DotRule rule)
@@ -175,8 +223,13 @@ namespace WaywardGamers.KParser.Bridge
                 return false;
             }
 
-            if (rule.ApplyWhenDamageLands)
-                return GetDirectDamage(row) > 0 || HasSuccessfulEnfeeble(row);
+            if (rule.ApplyWhenDamageLands ||
+                (IsPetAction(row) && rule.PetApplyWhenDamageLands))
+            {
+                return GetDirectDamage(row) > 0 ||
+                       HasSuccessfulEnfeeble(row) ||
+                       rule.AllowCompletedZeroDamageApplication;
+            }
 
             return HasSuccessfulEnfeeble(row);
         }
@@ -203,21 +256,29 @@ namespace WaywardGamers.KParser.Bridge
             out bool usedCapturedStats)
         {
             usedCapturedStats = false;
+            bool usePetVariant = IsPetAction(row) && rule.HasPetVariant;
+            int estimatedPower = usePetVariant
+                ? rule.PetEstimatedPower
+                : rule.EstimatedPower;
+            DotPowerFormula powerFormula = usePetVariant
+                ? rule.PetPowerFormula
+                : rule.PowerFormula;
+
             if (rule.UseDirectDamage)
                 return GetDirectDamage(row);
-            if (rule.PowerFormula == DotPowerFormula.Fixed)
-                return rule.EstimatedPower;
+            if (powerFormula == DotPowerFormula.DirectQuarter)
+                return Math.Max(1, GetDirectDamage(row) / 4);
+            if (powerFormula == DotPowerFormula.Fixed)
+                return estimatedPower;
 
             KPDatabaseDataSet.CombatantsRow actor =
                 row.CombatantsRowByActorCombatantRelation;
-            SanctumPlayerStatProfile profile = actor == null
-                ? null
-                : SanctumDotProfileStore.GetForActor(actor.CombatantName);
+            SanctumPlayerStatProfile profile = GetProfileForActor(actor);
             if (profile == null)
-                return rule.EstimatedPower;
+                return estimatedPower;
 
             int value;
-            switch (rule.PowerFormula)
+            switch (powerFormula)
             {
                 case DotPowerFormula.ElementalDebuff:
                     value = GetElementalDebuffPower(profile.Intelligence);
@@ -225,7 +286,7 @@ namespace WaywardGamers.KParser.Bridge
 
                 case DotPowerFormula.PoisonOne:
                     if (profile.EnfeeblingSkill <= 0)
-                        return rule.EstimatedPower;
+                        return estimatedPower;
                     value = profile.EnfeeblingSkill > 400
                         ? Math.Min((profile.EnfeeblingSkill - 225) / 5, 55)
                         : Math.Max(profile.EnfeeblingSkill / 25, 1);
@@ -233,7 +294,7 @@ namespace WaywardGamers.KParser.Bridge
 
                 case DotPowerFormula.PoisonTwo:
                     if (profile.EnfeeblingSkill <= 0)
-                        return rule.EstimatedPower;
+                        return estimatedPower;
                     value = profile.EnfeeblingSkill > 400
                         ? (int)Math.Floor(
                             profile.EnfeeblingSkill * 49.0 / 183.0 - 55.0)
@@ -242,31 +303,31 @@ namespace WaywardGamers.KParser.Bridge
 
                 case DotPowerFormula.PoisonThree:
                     if (profile.EnfeeblingSkill <= 0)
-                        return rule.EstimatedPower;
+                        return estimatedPower;
                     value = profile.EnfeeblingSkill / 10 + 1;
                     break;
 
                 case DotPowerFormula.Dokumori:
                     if (profile.NinjutsuSkill <= 0)
-                        return rule.EstimatedPower;
+                        return estimatedPower;
                     value = profile.NinjutsuSkill / 5 + 1;
                     break;
 
                 case DotPowerFormula.BioOne:
                     if (profile.DarkSkill <= 0)
-                        return rule.EstimatedPower;
+                        return estimatedPower;
                     value = Clamp((int)Math.Ceiling(profile.DarkSkill / 40.0), 1, 3);
                     break;
 
                 case DotPowerFormula.BioTwo:
                     if (profile.DarkSkill <= 0)
-                        return rule.EstimatedPower;
+                        return estimatedPower;
                     value = Clamp((profile.DarkSkill + 29) / 40, 3, 8);
                     break;
 
                 case DotPowerFormula.BioThree:
                     if (profile.DarkSkill <= 0)
-                        return rule.EstimatedPower;
+                        return estimatedPower;
                     if (profile.DarkSkill > 291)
                         value = 13 + (profile.DarkSkill - 291) / 27;
                     else if (profile.DarkSkill > 246)
@@ -278,22 +339,141 @@ namespace WaywardGamers.KParser.Bridge
 
                 case DotPowerFormula.BioFour:
                     if (profile.DarkSkill <= 0)
-                        return rule.EstimatedPower;
+                        return estimatedPower;
                     value = 5 + profile.DarkSkill / 60;
                     break;
 
                 case DotPowerFormula.BioFive:
                     if (profile.DarkSkill <= 0)
-                        return rule.EstimatedPower;
+                        return estimatedPower;
                     value = 5 + profile.DarkSkill / 50;
                     break;
 
+                case DotPowerFormula.SwordBurn:
+                    if (profile.SwordSkill <= 0)
+                        return estimatedPower;
+                    value = GetWeaponBurnPower(profile.SwordSkill);
+                    break;
+
+                case DotPowerFormula.ArcheryBurn:
+                    if (profile.ArcherySkill <= 0)
+                        return estimatedPower;
+                    value = GetWeaponBurnPower(profile.ArcherySkill);
+                    break;
+
+                case DotPowerFormula.MarksmanshipBurn:
+                    if (profile.MarksmanshipSkill <= 0)
+                        return estimatedPower;
+                    value = GetWeaponBurnPower(profile.MarksmanshipSkill);
+                    break;
+
+                case DotPowerFormula.ClubShock:
+                    if (profile.ClubSkill <= 0)
+                        return estimatedPower;
+                    value = profile.ClubSkill / 15;
+                    break;
+
+                case DotPowerFormula.DaggerPoison:
+                    if (profile.DaggerSkill <= 0)
+                        return estimatedPower;
+                    value = Math.Min(15, 3 + profile.DaggerSkill / 20);
+                    break;
+
+                case DotPowerFormula.PetLeafDagger:
+                    if (profile.MainJobLevel <= 0)
+                        return estimatedPower;
+                    value = Math.Max(1, profile.MainJobLevel / 10);
+                    break;
+
+                case DotPowerFormula.PetQueasyshroom:
+                    if (profile.MainJobLevel <= 0)
+                        return estimatedPower;
+                    value = profile.MainJobLevel / 10 + 1;
+                    break;
+
+                case DotPowerFormula.PetToxicSpit:
+                    if (profile.MainJobLevel <= 0)
+                        return estimatedPower;
+                    value = profile.MainJobLevel / 5 + 3;
+                    break;
+
                 default:
-                    return rule.EstimatedPower;
+                    return estimatedPower;
             }
 
             usedCapturedStats = true;
             return Math.Max(1, value);
+        }
+
+        private static int ResolveDurationSeconds(
+            KPDatabaseDataSet.InteractionsRow row,
+            DotRule rule,
+            out bool usedCapturedStats)
+        {
+            usedCapturedStats = false;
+            if (IsPetAction(row) && rule.HasPetVariant)
+                return rule.PetDurationSeconds;
+            if (rule.DurationFormula != DotDurationFormula.Kaustra)
+                return rule.DurationSeconds;
+
+            SanctumPlayerStatProfile profile = GetProfileForActor(
+                row.CombatantsRowByActorCombatantRelation);
+            if (profile == null || profile.DarkSkill <= 0)
+                return rule.DurationSeconds;
+
+            usedCapturedStats = true;
+            return Math.Max(3, (int)Math.Floor(3.0 * (1.0 + profile.DarkSkill / 11.0)));
+        }
+
+        private static int GetWeaponBurnPower(int skill)
+        {
+            return Math.Min(15, 3 + skill / 20);
+        }
+
+        private static bool IsPetAction(KPDatabaseDataSet.InteractionsRow row)
+        {
+            KPDatabaseDataSet.CombatantsRow actor =
+                row.CombatantsRowByActorCombatantRelation;
+            return actor != null &&
+                   (EntityType)actor.CombatantType == EntityType.Pet;
+        }
+
+        private static SanctumPlayerStatProfile GetProfileForActor(
+            KPDatabaseDataSet.CombatantsRow actor)
+        {
+            if (actor == null)
+                return null;
+
+            SanctumPlayerStatProfile profile =
+                SanctumDotProfileStore.GetForActor(actor.CombatantName);
+            if (profile != null || (EntityType)actor.CombatantType != EntityType.Pet)
+                return profile;
+
+            string currentPlayer = SanctumDotProfileStore.CurrentPlayerName;
+            string petName;
+            string ownerReference;
+            if (SanctumPetName.TryParse(
+                actor.CombatantName,
+                out petName,
+                out ownerReference) &&
+                (string.Equals(
+                    ownerReference,
+                    currentPlayer,
+                    StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(
+                    ownerReference,
+                    SanctumPetName.GetOwnerToken(currentPlayer),
+                    StringComparison.OrdinalIgnoreCase)))
+            {
+                return SanctumDotProfileStore.GetForActor(currentPlayer);
+            }
+
+            string mappedOwner;
+            return KParserBridgePetMappings.TryResolveOwner(
+                actor.CombatantName,
+                out mappedOwner)
+                ? SanctumDotProfileStore.GetForActor(mappedOwner)
+                : null;
         }
 
         private static int GetElementalDebuffPower(int intelligence)
@@ -410,17 +590,17 @@ namespace WaywardGamers.KParser.Bridge
             Add(rules, Scaled(Fixed("poison", 54, 3, 120, 2), DotPowerFormula.Dokumori), "Dokumori: Ni", "Dokumori Ni");
             Add(rules, Scaled(Fixed("poison", 54, 3, 360, 3), DotPowerFormula.Dokumori), "Dokumori: San", "Dokumori San");
 
-            Add(rules, DamageApplied(Opposed("dia", "bio", 1, 3, 60, 1)), "Dia", "Diaga");
-            Add(rules, DamageApplied(Opposed("dia", "bio", 2, 3, 120, 3)), "Dia II", "Diaga II");
-            Add(rules, DamageApplied(Opposed("dia", "bio", 3, 3, 180, 5)), "Dia III", "Diaga III");
-            Add(rules, DamageApplied(Opposed("dia", "bio", 4, 3, 180, 7)), "Dia IV", "Diaga IV");
-            Add(rules, DamageApplied(Opposed("dia", "bio", 5, 3, 180, 9)), "Dia V", "Diaga V");
+            Add(rules, ZeroDamageApplied(Opposed("dia", "bio", 1, 3, 60, 1)), "Dia", "Diaga");
+            Add(rules, ZeroDamageApplied(Opposed("dia", "bio", 2, 3, 120, 3)), "Dia II", "Diaga II");
+            Add(rules, ZeroDamageApplied(Opposed("dia", "bio", 3, 3, 180, 5)), "Dia III", "Diaga III");
+            Add(rules, ZeroDamageApplied(Opposed("dia", "bio", 4, 3, 180, 7)), "Dia IV", "Diaga IV");
+            Add(rules, ZeroDamageApplied(Opposed("dia", "bio", 5, 3, 180, 9)), "Dia V", "Diaga V");
 
-            Add(rules, DamageApplied(Scaled(Opposed("bio", "dia", 3, 3, 60, 2), DotPowerFormula.BioOne)), "Bio");
-            Add(rules, DamageApplied(Scaled(Opposed("bio", "dia", 7, 3, 120, 4), DotPowerFormula.BioTwo)), "Bio II");
-            Add(rules, DamageApplied(Scaled(Opposed("bio", "dia", 11, 3, 180, 6), DotPowerFormula.BioThree)), "Bio III");
-            Add(rules, DamageApplied(Scaled(Opposed("bio", "dia", 9, 3, 180, 8), DotPowerFormula.BioFour)), "Bio IV");
-            Add(rules, DamageApplied(Scaled(Opposed("bio", "dia", 10, 3, 180, 10), DotPowerFormula.BioFive)), "Bio V");
+            Add(rules, ZeroDamageApplied(Scaled(Opposed("bio", "dia", 3, 3, 60, 2), DotPowerFormula.BioOne)), "Bio");
+            Add(rules, ZeroDamageApplied(Scaled(Opposed("bio", "dia", 7, 3, 120, 4), DotPowerFormula.BioTwo)), "Bio II");
+            Add(rules, ZeroDamageApplied(Scaled(Opposed("bio", "dia", 11, 3, 180, 6), DotPowerFormula.BioThree)), "Bio III");
+            Add(rules, ZeroDamageApplied(Scaled(Opposed("bio", "dia", 9, 3, 180, 8), DotPowerFormula.BioFour)), "Bio IV");
+            Add(rules, ZeroDamageApplied(Scaled(Opposed("bio", "dia", 10, 3, 180, 10), DotPowerFormula.BioFive)), "Bio V");
 
             // Requiem potency can be raised by song gear and temporary effects.
             // The bridge cannot see those modifiers, so these are the exact
@@ -450,18 +630,89 @@ namespace WaywardGamers.KParser.Bridge
                 Add(rules, Direct("helix", 10, 90, 1), helix);
                 Add(rules, Direct("helix", 10, 90, 2), helix + " II");
             }
+            Add(
+                rules,
+                DamageApplied(Scaled(
+                    DurationScaled(
+                        Fixed("kaustra", 25, 3, 90, 1),
+                        DotDurationFormula.Kaustra),
+                    DotPowerFormula.DirectQuarter)),
+                "Kaustra");
 
             Add(rules, Fixed("poison", 7, 3, 120, 0), "Venom Shell");
             Add(rules, Fixed("frost", 17, 3, 60, 0, "choke"), "Cold Wave");
             Add(rules, Fixed("poison", 7, 3, 45, 0), "Bad Breath");
             Add(rules, Fixed("poison", 3, 3, 60, 0), "Feather Storm");
             Add(rules, Fixed("poison", 18, 3, 180, 0), "Disseverment");
-            Add(rules, Fixed("poison", 3, 3, 180, 0), "Queasyshroom");
+            Add(
+                rules,
+                PetVariant(
+                    Fixed("poison", 3, 3, 180, 0),
+                    8,
+                    60,
+                    DotPowerFormula.PetQueasyshroom),
+                "Queasyshroom");
             Add(rules, Fixed("poison", 5, 3, 60, 0), "Poison Breath");
 
-            Add(rules, DamageApplied(Fixed("burn", 15, 3, 45, 0, "frost")), "Burning Blade");
-            Add(rules, DamageApplied(Fixed("burn", 15, 3, 30, 0, "frost")), "Hot Shot", "Flaming Arrow");
-            Add(rules, DamageApplied(Fixed("shock", 17, 3, 60, 0, "drown")), "Brainshaker");
+            Add(
+                rules,
+                DamageApplied(Scaled(
+                    Fixed("burn", 15, 3, 45, 0, "frost"),
+                    DotPowerFormula.SwordBurn)),
+                "Burning Blade");
+            Add(
+                rules,
+                DamageApplied(Scaled(
+                    Fixed("burn", 15, 3, 30, 0, "frost"),
+                    DotPowerFormula.MarksmanshipBurn)),
+                "Hot Shot");
+            Add(
+                rules,
+                DamageApplied(Scaled(
+                    Fixed("burn", 15, 3, 30, 0, "frost"),
+                    DotPowerFormula.ArcheryBurn)),
+                "Flaming Arrow");
+            Add(
+                rules,
+                DamageApplied(Scaled(
+                    Fixed("shock", 17, 3, 60, 0, "drown"),
+                    DotPowerFormula.ClubShock)),
+                "Brainshaker");
+            Add(
+                rules,
+                OnlyIfAbsent(DamageApplied(Fixed("poison", 1, 3, 90, 0))),
+                "Wasp Sting");
+            Add(
+                rules,
+                OnlyIfAbsent(DamageApplied(Scaled(
+                    Fixed("poison", 15, 3, 90, 0),
+                    DotPowerFormula.DaggerPoison))),
+                "Viper Bite");
+            Add(
+                rules,
+                OnlyIfAbsent(DamageApplied(Fixed("poison", 10, 3, 90, 0))),
+                "Blade: Yu",
+                "Blade Yu");
+
+            Add(
+                rules,
+                DamageApplied(Scaled(
+                    Fixed("poison", 7, 3, 90, 0),
+                    DotPowerFormula.PetLeafDagger)),
+                "Leaf Dagger");
+            Add(
+                rules,
+                DamageApplied(Fixed("bio", 12, 3, 120, 0, "dia")),
+                "Purulent Ooze");
+            Add(
+                rules,
+                Scaled(
+                    Fixed("poison", 18, 3, 180, 0),
+                    DotPowerFormula.PetToxicSpit),
+                "Toxic Spit");
+            Add(rules, DamageApplied(Fixed("poison", 2, 3, 60, 0)), "Venom");
+            Add(rules, Fixed("poison", 15, 3, 120, 0), "Venom Spray");
+
             DotRule poisonNails = DamageApplied(Fixed("poison", 1, 3, 60, 0));
             poisonNails.OnlyIfEffectAbsent = true;
             Add(rules, poisonNails, "Poison Nails");
@@ -528,9 +779,44 @@ namespace WaywardGamers.KParser.Bridge
             return rule;
         }
 
+        private static DotRule ZeroDamageApplied(DotRule rule)
+        {
+            rule.ApplyWhenDamageLands = true;
+            rule.AllowCompletedZeroDamageApplication = true;
+            return rule;
+        }
+
         private static DotRule Scaled(DotRule rule, DotPowerFormula formula)
         {
             rule.PowerFormula = formula;
+            return rule;
+        }
+
+        private static DotRule DurationScaled(
+            DotRule rule,
+            DotDurationFormula formula)
+        {
+            rule.DurationFormula = formula;
+            return rule;
+        }
+
+        private static DotRule OnlyIfAbsent(DotRule rule)
+        {
+            rule.OnlyIfEffectAbsent = true;
+            return rule;
+        }
+
+        private static DotRule PetVariant(
+            DotRule rule,
+            int power,
+            int durationSeconds,
+            DotPowerFormula formula)
+        {
+            rule.HasPetVariant = true;
+            rule.PetEstimatedPower = power;
+            rule.PetDurationSeconds = durationSeconds;
+            rule.PetPowerFormula = formula;
+            rule.PetApplyWhenDamageLands = true;
             return rule;
         }
 
@@ -553,9 +839,16 @@ namespace WaywardGamers.KParser.Bridge
             public int Tier { get; set; }
             public bool UseDirectDamage { get; set; }
             public bool ApplyWhenDamageLands { get; set; }
+            public bool AllowCompletedZeroDamageApplication { get; set; }
             public bool UsesOppositeTierGate { get; set; }
             public bool OnlyIfEffectAbsent { get; set; }
             public DotPowerFormula PowerFormula { get; set; }
+            public DotDurationFormula DurationFormula { get; set; }
+            public bool HasPetVariant { get; set; }
+            public int PetEstimatedPower { get; set; }
+            public int PetDurationSeconds { get; set; }
+            public DotPowerFormula PetPowerFormula { get; set; }
+            public bool PetApplyWhenDamageLands { get; set; }
         }
 
         private enum DotPowerFormula
@@ -570,7 +863,22 @@ namespace WaywardGamers.KParser.Bridge
             BioTwo,
             BioThree,
             BioFour,
-            BioFive
+            BioFive,
+            DirectQuarter,
+            SwordBurn,
+            ArcheryBurn,
+            MarksmanshipBurn,
+            ClubShock,
+            DaggerPoison,
+            PetLeafDagger,
+            PetQueasyshroom,
+            PetToxicSpit
+        }
+
+        private enum DotDurationFormula
+        {
+            Fixed,
+            Kaustra
         }
 
         private sealed class DotApplication

@@ -28,6 +28,12 @@ namespace WaywardGamers.KParser.Bridge
         public int Intelligence { get; set; }
         public int Mind { get; set; }
         public int Charisma { get; set; }
+        public int DaggerSkill { get; set; }
+        public int SwordSkill { get; set; }
+        public int KatanaSkill { get; set; }
+        public int ClubSkill { get; set; }
+        public int ArcherySkill { get; set; }
+        public int MarksmanshipSkill { get; set; }
         public int EnfeeblingSkill { get; set; }
         public int ElementalSkill { get; set; }
         public int DarkSkill { get; set; }
@@ -347,6 +353,12 @@ namespace WaywardGamers.KParser.Bridge
             int intelligence = ReadTotalStat(data, 24, 38);
             int mind = ReadTotalStat(data, 26, 40);
             int charisma = ReadTotalStat(data, 28, 42);
+            int dagger = ReadCombatSkill(data, 2);
+            int sword = ReadCombatSkill(data, 3);
+            int katana = ReadCombatSkill(data, 9);
+            int club = ReadCombatSkill(data, 11);
+            int archery = ReadCombatSkill(data, 25);
+            int marksmanship = ReadCombatSkill(data, 26);
             int enfeebling = ReadCombatSkill(data, 36);
             int elemental = ReadCombatSkill(data, 37);
             int dark = ReadCombatSkill(data, 38);
@@ -358,7 +370,10 @@ namespace WaywardGamers.KParser.Bridge
                 !IsValidStat(strength) || !IsValidStat(dexterity) ||
                 !IsValidStat(vitality) || !IsValidStat(agility) ||
                 !IsValidStat(intelligence) || !IsValidStat(mind) ||
-                !IsValidStat(charisma) || !IsValidSkill(enfeebling) ||
+                !IsValidStat(charisma) || !IsValidSkill(dagger) ||
+                !IsValidSkill(sword) || !IsValidSkill(katana) ||
+                !IsValidSkill(club) || !IsValidSkill(archery) ||
+                !IsValidSkill(marksmanship) || !IsValidSkill(enfeebling) ||
                 !IsValidSkill(elemental) || !IsValidSkill(dark) ||
                 !IsValidSkill(ninjutsu) || !IsValidSkill(singing))
             {
@@ -380,6 +395,12 @@ namespace WaywardGamers.KParser.Bridge
                 Intelligence = intelligence,
                 Mind = mind,
                 Charisma = charisma,
+                DaggerSkill = dagger,
+                SwordSkill = sword,
+                KatanaSkill = katana,
+                ClubSkill = club,
+                ArcherySkill = archery,
+                MarksmanshipSkill = marksmanship,
                 EnfeeblingSkill = enfeebling,
                 ElementalSkill = elemental,
                 DarkSkill = dark,
@@ -418,7 +439,7 @@ namespace WaywardGamers.KParser.Bridge
                 return "unreadable";
 
             return string.Format(
-                "job={0}/{1}, subjob={2}/{3}, stats={4},{5},{6},{7},{8},{9},{10}, skills={11},{12},{13},{14},{15}, bytes0-63={16}",
+                "job={0}/{1}, subjob={2}/{3}, stats={4},{5},{6},{7},{8},{9},{10}, weaponSkills={11},{12},{13},{14},{15},{16}, magicSkills={17},{18},{19},{20},{21}, bytes0-63={22}",
                 data[8],
                 data[9],
                 data[10],
@@ -430,6 +451,12 @@ namespace WaywardGamers.KParser.Bridge
                 ReadTotalStat(data, 24, 38),
                 ReadTotalStat(data, 26, 40),
                 ReadTotalStat(data, 28, 42),
+                ReadCombatSkill(data, 2),
+                ReadCombatSkill(data, 3),
+                ReadCombatSkill(data, 9),
+                ReadCombatSkill(data, 11),
+                ReadCombatSkill(data, 25),
+                ReadCombatSkill(data, 26),
                 ReadCombatSkill(data, 36),
                 ReadCombatSkill(data, 37),
                 ReadCombatSkill(data, 38),

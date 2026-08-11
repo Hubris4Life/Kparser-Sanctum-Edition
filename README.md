@@ -8,7 +8,7 @@ This project is a modified derivative of KParser, originally created by David Sm
 
 ## Project status
 
-The current development release is **Preview 24**, assembly version **0.24.0**. It includes selectable Sanctum XI and Other compatibility profiles but should still be treated as preview software. Memory layouts, private-server client builds, and combat-log behavior can change.
+The current development release is **Preview 26**, assembly version **0.26.0**. It adds owner-aware pet displays, zero-damage Dia/Bio tracking, physical critical-rate reporting, a true overlay, and expanded diagnostics and timeline stability work. It should still be treated as preview software while compatibility and stability testing continues. Memory layouts, private-server client builds, and combat-log behavior can change.
 
 Official Setup and Portable packages are published on the [GitHub Releases page](https://github.com/Hubris4Life/Kparser-Sanctum-Edition/releases). The repository itself intentionally contains source rather than compiled application builds.
 
@@ -16,10 +16,12 @@ Official Setup and Portable packages are published on the [GitHub Releases page]
 
 - Automatic XiLoader, Horizon Loader, PlayOnline, and FFXIMain chat-log detection
 - Running-total, current-fight, individual-fight, and per-monster reports
-- Damage dealt and taken, healing, buffs, debuffs, deaths, fights, experience, HELM, crafting, chat, and item-drop reports
+- Damage dealt and taken, healing, buffs, debuffs, deaths, fights, experience, HELM, crafting, chat, item-drop, and consumable-use reports
 - Melee, ranged, weapon-skill, ability, magic, skillchain, additional-effect, reactive-damage, calculated DoT, accuracy, and multi-attack views
 - Offensive and defensive buff-performance analysis
 - Expanded curing, status-removal, and Corsair roll statistics
+- Interactive interval/cumulative damage timeline and weapon-skill/TP-cycle pacing reports
+- Expanded inferred extra-attack, Zanshin-candidate, and retaliation analysis
 - Compact live monitor with one-second refresh, transparency, and party/alliance/player filtering
 - CSV export and party-chat summary support
 - Named player parse snapshots and side-by-side build comparisons
@@ -28,6 +30,8 @@ Official Setup and Portable packages are published on the [GitHub Releases page]
 - Owner-attributed pet totals and separate player/pet damage filters
 - Optional passive KParserBridge Ashita v4 mapping for Other servers
 - Dark and light interface themes
+- Startup and manual update checks with per-version patch notes and verified packages
+- Built-in diagnostics for engine, memory, compatibility, pet attribution, and recoverable application errors
 
 ## How it works
 

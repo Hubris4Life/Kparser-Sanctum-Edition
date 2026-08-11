@@ -13,7 +13,7 @@ The Sanctum Edition work includes:
 - Faster safe message commits while preserving the parser's action-join window
 - Integrated parse storage, reset archiving, report filtering, and export support
 - A new .NET 10 WPF dashboard and compact live monitor
-- Damage, defense, healing, status, buff, experience, crafting, HELM, chat, drop, Corsair roll, multi-attack, and player-build reports
+- Damage, defense, healing, status, buff, experience, crafting, HELM, chat, drop, item-use, Corsair roll, multi-attack, damage-timeline, WS/TP-cycle, and player-build reports
 - Server-rule DoT estimation and player-stat capture support
 - Sanctum server pet-owner name decoding with combined owner totals and separate pet-only filtering
 - Optional SanctumChat/Ashita pet-name expansion using authoritative server mappings
@@ -22,6 +22,7 @@ The Sanctum Edition work includes:
 - Selectable Sanctum XI and Other compatibility profiles with clean parse boundaries
 - Conservative Other-server rules and optional passive KParserBridge pet-owner mapping
 - Installer and portable single-file packaging
+- GitHub release update checks, per-release patch notes, package verification, and safe Setup/Portable update application
 - Disabled the obsolete inherited Google AJAX translation key and no-key network path
 - Removed the unfinished inherited ZeroMQ PacketReader and migrated old Packet preferences to the supported RAM reader
 

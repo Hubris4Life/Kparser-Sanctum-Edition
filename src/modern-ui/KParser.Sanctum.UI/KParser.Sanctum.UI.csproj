@@ -9,9 +9,9 @@
     <RootNamespace>KParser.Sanctum.UI</RootNamespace>
     <PlatformTarget>x64</PlatformTarget>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.24.0</Version>
-    <FileVersion>0.24.0.0</FileVersion>
-    <InformationalVersion>Preview 24</InformationalVersion>
+    <Version>0.26.0</Version>
+    <FileVersion>0.26.0.0</FileVersion>
+    <InformationalVersion>Preview 26</InformationalVersion>
     <Authors>Sanctum Edition contributors</Authors>
     <Copyright>Copyright (C) 2026 Sanctum Edition contributors</Copyright>
     <PackageLicenseExpression>GPL-2.0-or-later</PackageLicenseExpression>
@@ -25,6 +25,8 @@
   <ItemGroup>
     <InternalsVisibleTo Include="PlayerComparisonSmoke" />
     <InternalsVisibleTo Include="KParserBridgeInstallerSmoke" />
+    <InternalsVisibleTo Include="UpdateServiceSmoke" />
+    <InternalsVisibleTo Include="TimelineRenderSmoke" />
   </ItemGroup>
 
   <ItemGroup>

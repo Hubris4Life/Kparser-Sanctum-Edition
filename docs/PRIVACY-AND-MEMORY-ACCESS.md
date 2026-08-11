@@ -28,11 +28,15 @@ The inherited engine previously contained an unfinished ZeroMQ packet-reader pat
 
 ## External communication
 
-No dedicated analytics or telemetry client was identified in the current source review. The inherited ParserCore source retains a legacy Google AJAX translation compatibility helper, but its historical embedded key has been removed and the no-key path returns without making a request. Maintainers should remove the obsolete helper entirely if no compatibility consumer remains.
+KParser checks the project's public GitHub Releases API for updates when it starts. This check can be disabled under **Options > Check for updates on startup**, and a manual check remains available under **Help > Check for Updates**. Update packages are downloaded only after the user chooses to install one. GitHub receives the normal connection information associated with an HTTPS request, such as the user's IP address and the KParser user-agent string.
+
+No dedicated analytics or telemetry client is included. The inherited ParserCore source retains a legacy Google AJAX translation compatibility helper, but its historical embedded key has been removed and the no-key path returns without making a request. Maintainers should remove the obsolete helper entirely if no compatibility consumer remains.
 
 ## Sharing diagnostics
 
 Parse databases, CSV exports, screenshots, and memory reports can contain character names, linkshell chat, and other player information. Sanitize them before attaching them to a public issue. Never upload account credentials, server credentials, complete process dumps, or another player's private messages without permission.
+
+The **Tools > Diagnostics** report shortens paths below the current Windows user profile before copying them. It intentionally retains character names and local process IDs when available because they can be necessary to diagnose player registration and client selection. Application error logs remain local unless the user chooses to share them and may contain exception messages or paths supplied by Windows and third-party components.
 
 ## Game and server rules
 

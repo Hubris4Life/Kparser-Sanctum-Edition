@@ -139,6 +139,12 @@ internal sealed class MainWindowViewModel : ObservableObject
                 UpdateGroupingModes(selectedReport, value?.Key);
                 RaisePropertyChanged(nameof(ShowDamageSourceFooter));
                 RaisePropertyChanged(nameof(ShowCombatantFilter));
+                RaisePropertyChanged(nameof(IsTimelineSelected));
+                RaisePropertyChanged(nameof(ShowReportTable));
+                RaisePropertyChanged(nameof(ShowTotalRow));
+                RaisePropertyChanged(nameof(ShowSelectedFooter));
+                RaisePropertyChanged(nameof(CombatantFilterLabel));
+                RaisePropertyChanged(nameof(SearchFilterLabel));
                 if (!wasUpdating)
                     ReportFilterChanged?.Invoke(this, EventArgs.Empty);
             }
@@ -179,22 +185,25 @@ internal sealed class MainWindowViewModel : ObservableObject
         }
     }
     public bool IsActionGrouping => SelectedGroupModeKey == "action";
+    public bool IsTimelineSelected => IsDamageDealtSelected && SelectedDisplayModeKey == "timeline";
+    public bool ShowReportTable => !IsTimelineSelected;
     public bool ShowCombatantFilter => !IsChatSelected && !IsExperienceSelected &&
-                                       !(IsLootSelected && SelectedDisplayModeKey == "helm");
+                                        !(IsLootSelected && SelectedDisplayModeKey == "helm");
     public bool ShowSearchFilter => IsChatSelected || IsLootSelected || IsCraftingSelected;
-    public bool ShowTotalRow => !IsChatSelected;
-    public bool ShowSelectedFooter => !IsChatSelected;
+    public bool ShowTotalRow => !IsChatSelected && !IsTimelineSelected;
+    public bool ShowSelectedFooter => !IsChatSelected && !IsTimelineSelected;
     public string EncounterFilterLabel => IsChatSelected
         ? "Speaker"
         : IsCraftingSelected ? "Crafting session" : "Fight view";
     public string CombatantFilterLabel => IsLootSelected
-        ? "Recipients"
+        ? SelectedDisplayModeKey == "itemsused" ? "Players" : "Recipients"
         : IsCraftingSelected ? "Crafters" : "Combatants";
     public string SearchFilterLabel => IsChatSelected
         ? "Search chat"
-        : IsCraftingSelected ? "Search crafting" : "Search loot";
+        : IsCraftingSelected ? "Search crafting" : SelectedDisplayModeKey == "itemsused" ? "Search items used" : "Search loot";
     public bool ShowDamageSourceFooter =>
-        (IsDamageDealtSelected && !IsActionGrouping && SelectedDisplayModeKey != "dots") ||
+        (IsDamageDealtSelected && !IsActionGrouping &&
+         SelectedDisplayModeKey is not ("dots" or "timeline" or "wsrates" or "multiattacks")) ||
         (IsFightsSelected && SelectedDisplayModeKey == "performance");
 
     public bool IsDamageDealtSelected
@@ -311,8 +320,7 @@ internal sealed class MainWindowViewModel : ObservableObject
     public bool IsStopEnabled => engineConnected && parserRunning && !engineCommandBusy;
     public bool IsResetEnabled => engineConnected && !engineCommandBusy;
     public bool IsDetectEnabled => engineConnected && !parserRunning && !engineCommandBusy;
-    public bool CanCaptureDotStats => supportsEstimatedDots && engineConnected && !engineCommandBusy &&
-                                      SelectedCombatant is { CombatantType: "Player" };
+    public bool CanCaptureDotStats => supportsEstimatedDots && engineConnected && !engineCommandBusy;
     public bool CanSavePlayerSnapshot => hasReceivedLiveSnapshot &&
                                          selectedReport == "damageDealt" &&
                                          !IsActionGrouping &&
@@ -348,6 +356,8 @@ internal sealed class MainWindowViewModel : ObservableObject
         string displayMode,
         string groupMode)
     {
+        if (string.Equals(combatantScope, "players", StringComparison.OrdinalIgnoreCase))
+            combatantScope = "self";
         updatingSelectors = true;
         try
         {
@@ -429,7 +439,9 @@ internal sealed class MainWindowViewModel : ObservableObject
         if (encounter.IsActive && snapshot.ParserRunning)
             displayDurationSeconds += Math.Max(0, (DateTime.UtcNow - generated.ToUniversalTime()).TotalSeconds);
         var durationText = FormatDuration(displayDurationSeconds);
-        var usesDurationRate = snapshot.Report == "damageDealt" ||
+        var analyticalDamageReport = snapshot.Report == "damageDealt" &&
+                                     snapshot.DisplayMode is "wsrates" or "multiattacks";
+        var usesDurationRate = (snapshot.Report == "damageDealt" && !analyticalDamageReport) ||
                                snapshot.Report == "damageTaken" ||
                                (snapshot.Report == "healing" && snapshot.DisplayMode != "status") ||
                                snapshot.Report == "fights";
@@ -439,8 +451,15 @@ internal sealed class MainWindowViewModel : ObservableObject
         var fightWord = encounter.FightCount == 1 ? "fight" : "fights";
         var reportTitle = snapshot.Report == "fights"
             ? snapshot.DisplayMode == "performance" ? "Player Performance" : "Fight History"
-            : snapshot.Report == "damageDealt" && snapshot.DisplayMode == "dots"
-                ? "Calculated Damage over Time"
+            : snapshot.Report == "damageDealt"
+                ? snapshot.DisplayMode switch
+                {
+                    "dots" => "Calculated Damage over Time",
+                    "timeline" => "Damage Timeline",
+                    "wsrates" => "Weapon Skill & TP Cycle Rates",
+                    "multiattacks" => "Extra Attack Analysis",
+                    _ => GetReportTitle(snapshot.Report)
+                }
                 : GetReportTitle(snapshot.Report);
 
         switch (encounter.Scope)
@@ -531,6 +550,10 @@ internal sealed class MainWindowViewModel : ObservableObject
             .ToString("N1") + snapshot.Columns.RateSuffix;
         TotalRowLabel = snapshot.Report == "damageDealt" && snapshot.DisplayMode == "dots"
             ? "Calculated DoT total"
+            : snapshot.Report == "damageDealt" && snapshot.DisplayMode == "wsrates"
+                ? "Weapon skill total"
+            : snapshot.Report == "damageDealt" && snapshot.DisplayMode == "multiattacks"
+                ? "Attack round total"
             : snapshot.Report == "chat"
                 ? "Visible messages"
             : snapshot.Report == "loot"
@@ -541,11 +564,10 @@ internal sealed class MainWindowViewModel : ObservableObject
                 ? "Fight history total"
             : snapshot.Report == "fights"
                 ? "Player performance total"
-                : snapshot.CombatantScope switch
+                : SelectedCombatantScopeKey switch
                 {
                     "party" => "Party total",
-                    "players" => "Player total",
-                    "pets" => "Pet total",
+                    "self" => "Self total",
                     _ => "Alliance total"
                 };
         EventStatus = snapshot.Report == "chat"
@@ -554,6 +576,10 @@ internal sealed class MainWindowViewModel : ObservableObject
                 ? $"{snapshot.Combatants.Count:N0} loot rows · {encounter.FightCount:N0} {fightWord}"
             : snapshot.Report == "crafting"
                 ? $"{encounter.EventCount:N0} attempts · {encounter.FightCount:N0} sessions · success rate {encounter.AllianceDps:N1}%"
+            : snapshot.Report == "damageDealt" && snapshot.DisplayMode == "timeline"
+                ? $"{snapshot.Combatants.Count:N0} timeline intervals · {encounter.EventCount:N0} combat events · {encounter.FightCount:N0} {fightWord}"
+            : snapshot.Report == "damageDealt" && snapshot.DisplayMode == "wsrates"
+                ? $"{encounter.TotalDamage:N0} weapon skills · observed attack counts are TP-cycle proxies"
                 : $"{encounter.EventCount:N0} combat events · {encounter.FightCount:N0} {fightWord}" +
                   (snapshot.Report == "damageDealt" && snapshot.DisplayMode == "dots"
                       ? " · calculated from effect applications"
@@ -821,6 +847,7 @@ internal sealed class MainWindowViewModel : ObservableObject
                     DisplayModes.Add(new ReportFilterOption { Key = "distribution", Label = "Recipient distribution" });
                     DisplayModes.Add(new ReportFilterOption { Key = "rates", Label = "Drop rates" });
                     DisplayModes.Add(new ReportFilterOption { Key = "treasurehunter", Label = "Drop rates by Treasure Hunter" });
+                    DisplayModes.Add(new ReportFilterOption { Key = "itemsused", Label = "Consumables used" });
                     DisplayModes.Add(new ReportFilterOption { Key = "helm", Label = "HELM activity" });
                     break;
                 case "crafting":
@@ -843,6 +870,8 @@ internal sealed class MainWindowViewModel : ObservableObject
                     DisplayModes.Add(new ReportFilterOption { Key = "additional", Label = "Additional effects" });
                     DisplayModes.Add(new ReportFilterOption { Key = "reactive", Label = "Reactive damage" });
                     DisplayModes.Add(new ReportFilterOption { Key = "accuracy", Label = "Accuracy" });
+                    DisplayModes.Add(new ReportFilterOption { Key = "timeline", Label = "Damage timeline" });
+                    DisplayModes.Add(new ReportFilterOption { Key = "wsrates", Label = "WS / TP cycle rates" });
                     DisplayModes.Add(new ReportFilterOption { Key = "multiattacks", Label = "Multi-attack rounds (inferred)" });
                     break;
             }
@@ -1004,29 +1033,9 @@ internal sealed class MainWindowViewModel : ObservableObject
             }
             else
             {
-                CombatantScopes.Add(new ReportFilterOption
-                {
-                    Key = "all",
-                    Label = report == "damageDealt" ? "Alliance (pets attributed)" : "Entire alliance"
-                });
-                CombatantScopes.Add(new ReportFilterOption
-                {
-                    Key = "party",
-                    Label = report == "damageDealt" ? "Party (pets attributed)" : "Party only"
-                });
-                CombatantScopes.Add(new ReportFilterOption
-                {
-                    Key = "players",
-                    Label = report == "damageDealt" ? "Player damage only" : "Players only"
-                });
-                if (report == "damageDealt")
-                {
-                    CombatantScopes.Add(new ReportFilterOption
-                    {
-                        Key = "pets",
-                        Label = "Pet damage only"
-                    });
-                }
+                CombatantScopes.Add(new ReportFilterOption { Key = "all", Label = "Alliance" });
+                CombatantScopes.Add(new ReportFilterOption { Key = "party", Label = "Party" });
+                CombatantScopes.Add(new ReportFilterOption { Key = "self", Label = "Self" });
             }
 
             SelectedCombatantScope = CombatantScopes.FirstOrDefault(option => option.Key == previousKey)
@@ -1162,7 +1171,7 @@ internal sealed class MainWindowViewModel : ObservableObject
         "fights" => "Fights & Performance",
         "experience" => "Experience",
         "chat" => "Chat",
-        "loot" => "Item Drops",
+        "loot" => "Items & Loot",
         "crafting" => "Crafting",
         _ => "Damage Dealt"
     };

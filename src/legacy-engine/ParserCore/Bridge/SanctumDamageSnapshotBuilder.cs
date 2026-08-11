@@ -14,6 +14,7 @@ namespace WaywardGamers.KParser.Bridge
 {
     internal static class SanctumDamageSnapshotBuilder
     {
+        private const string SeparatePetRowsSuffix = ":petrows";
         private static readonly Regex PlayerJob =
             new Regex(@"^\[(?<job>[^]]{3,15})[^]]*]", RegexOptions.Compiled);
         private static readonly string[] JobAbbreviations =
@@ -82,6 +83,9 @@ namespace WaywardGamers.KParser.Bridge
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly Regex HelmDigging = new Regex(
             @"^Obtained: (?<item>(?:(?:a|an|the) )?\w+(?: \w+)*)\.$",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex TpReturnEcho = new Regex(
+            @"KP(?:arser)?:\s*(?:TP return =)?\s*(?<tp>\d+)%?\W*(?:(?:WS)?\s*TP)?",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         internal static SanctumBridgeSnapshot Build(
@@ -234,6 +238,7 @@ namespace WaywardGamers.KParser.Bridge
                 parseMode ?? string.Empty,
                 SanctumDotProfileStore.Revision.ToString(CultureInfo.InvariantCulture),
                 ServerCompatibility.CurrentProfile,
+                ServerCompatibility.LocalPlayerName,
                 KParserBridgePetMappings.Revision.ToString(CultureInfo.InvariantCulture)
             });
         }
@@ -286,7 +291,7 @@ namespace WaywardGamers.KParser.Bridge
                             b.IsStartTimeNull() == false &&
                             ((EntityType)b.CombatantsRowByEnemyCombatantRelation.CombatantType == EntityType.Mob ||
                              (EntityType)b.CombatantsRowByEnemyCombatantRelation.CombatantType == EntityType.CharmedPlayer) &&
-                            HasPartyDamage(b))
+                            HasAllianceOrOwnedPetDamage(b))
                 .OrderBy(b => b.StartTime)
                 .ThenBy(b => b.BattleID)
                 .ToList();
@@ -325,7 +330,9 @@ namespace WaywardGamers.KParser.Bridge
                 requestedSearchText,
                 excludeCommonDrops);
 
-            if (snapshot.Report == "damageDealt")
+            if (snapshot.Report == "damageDealt" &&
+                snapshot.DisplayMode != "timeline" &&
+                snapshot.DisplayMode != "wsrates")
             {
                 combatants = ServerCompatibility.IsSanctumXi
                     ? ApplySanctumPetOwnership(
@@ -345,8 +352,9 @@ namespace WaywardGamers.KParser.Bridge
             }
 
             long total = combatants.Sum(row => row.Damage);
-            if ((snapshot.Report == "fights" || snapshot.Report == "experience") &&
-                snapshot.DisplayMode == "history")
+            if (((snapshot.Report == "fights" || snapshot.Report == "experience") &&
+                 snapshot.DisplayMode == "history") ||
+                (snapshot.Report == "damageDealt" && snapshot.DisplayMode == "timeline"))
             {
                 combatants = combatants
                     .OrderBy(row => row.Rank)
@@ -570,6 +578,24 @@ namespace WaywardGamers.KParser.Bridge
                     snapshot.Columns = CreateDamageDealtColumns(
                         snapshot.DisplayMode,
                         snapshot.GroupMode);
+                    if (snapshot.DisplayMode == "timeline")
+                    {
+                        return BuildDamageTimeline(
+                            battles,
+                            events,
+                            enemyIds,
+                            snapshot.CombatantScope,
+                            snapshot.ParserRunning);
+                    }
+                    if (snapshot.DisplayMode == "wsrates")
+                    {
+                        return BuildWeaponSkillRates(
+                            dataSet,
+                            battles,
+                            events,
+                            enemyIds,
+                            snapshot.CombatantScope);
+                    }
                     if (snapshot.DisplayMode == "multiattacks")
                         return BuildMultiAttacks(events, enemyIds, snapshot.CombatantScope);
                     if (snapshot.DisplayMode == "dots")
@@ -1279,6 +1305,15 @@ namespace WaywardGamers.KParser.Bridge
                 .ToArray();
             string searchText = NormalizeSearchText(requestedSearchText);
 
+            if (displayMode == "itemsused")
+            {
+                return BuildItemUsage(
+                    events,
+                    combatantScope,
+                    searchText,
+                    battles.Count);
+            }
+
             IEnumerable<KPDatabaseDataSet.LootRow> query = dataSet.Loot.Where(row =>
                 row.IsBattleIDNull() == false && battleIds.Contains(row.BattleID));
 
@@ -1324,6 +1359,95 @@ namespace WaywardGamers.KParser.Bridge
             if (displayMode == "treasurehunter")
                 return BuildLootRates(loot, battles, true);
             return BuildLootSummary(loot, battles.Count);
+        }
+
+        private static List<SanctumCombatantSnapshot> BuildItemUsage(
+            IEnumerable<KPDatabaseDataSet.InteractionsRow> events,
+            string combatantScope,
+            string searchText,
+            int fightCount)
+        {
+            IEnumerable<KPDatabaseDataSet.InteractionsRow> itemEvents = events.Where(row =>
+                !row.IsActorIDNull() && !row.IsItemIDNull() &&
+                row.ItemsRow != null && (AidType)row.AidType == AidType.Item &&
+                row.CombatantsRowByActorCombatantRelation != null &&
+                (EntityType)row.CombatantsRowByActorCombatantRelation.CombatantType == EntityType.Player);
+
+            if (combatantScope.StartsWith("recipient:", StringComparison.Ordinal))
+            {
+                string selectedPlayer = combatantScope.Substring("recipient:".Length);
+                itemEvents = itemEvents.Where(row => string.Equals(
+                    row.CombatantsRowByActorCombatantRelation.CombatantName,
+                    selectedPlayer,
+                    StringComparison.OrdinalIgnoreCase));
+            }
+            else if (combatantScope == "party")
+            {
+                itemEvents = itemEvents.Where(row =>
+                    (ActorPlayerType)row.ActorType == ActorPlayerType.Self ||
+                    (ActorPlayerType)row.ActorType == ActorPlayerType.Party);
+            }
+
+            if (!string.IsNullOrEmpty(searchText))
+            {
+                itemEvents = itemEvents.Where(row =>
+                    ContainsIgnoreCase(row.ItemsRow.ItemName, searchText) ||
+                    ContainsIgnoreCase(row.CombatantsRowByActorCombatantRelation.CombatantName, searchText));
+            }
+
+            List<SanctumCombatantSnapshot> rows = new List<SanctumCombatantSnapshot>();
+            foreach (IGrouping<string, KPDatabaseDataSet.InteractionsRow> playerGroup in itemEvents
+                .GroupBy(row => row.CombatantsRowByActorCombatantRelation.CombatantName)
+                .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                foreach (IGrouping<string, KPDatabaseDataSet.InteractionsRow> itemGroup in playerGroup
+                    .GroupBy(row => row.ItemsRow.ItemName)
+                    .OrderByDescending(group => group.Count())
+                    .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    KPDatabaseDataSet.InteractionsRow first = itemGroup
+                        .OrderBy(row => row.Timestamp)
+                        .First();
+                    KPDatabaseDataSet.InteractionsRow last = itemGroup
+                        .OrderByDescending(row => row.Timestamp)
+                        .First();
+                    int uses = itemGroup.Count();
+                    int fightsUsed = itemGroup
+                        .Where(row => !row.IsBattleIDNull())
+                        .Select(row => row.BattleID)
+                        .Distinct()
+                        .Count();
+                    KPDatabaseDataSet.CombatantsRow player =
+                        first.CombatantsRowByActorCombatantRelation;
+                    SanctumCombatantSnapshot reportRow = CreateCombatant(
+                        player,
+                        (EntityType)player.CombatantType);
+                    reportRow.Key = "itemuse:" + player.CombatantID.ToString(CultureInfo.InvariantCulture) + ":" + itemGroup.Key;
+                    reportRow.Name = playerGroup.Key;
+                    reportRow.Job = itemGroup.Key;
+                    reportRow.Damage = uses;
+                    reportRow.Dps = (double)uses / Math.Max(1, fightCount);
+                    reportRow.Melee = fightsUsed;
+                    reportRow.WeaponSkills = itemGroup
+                        .Where(item => !item.IsTargetIDNull())
+                        .Select(item => item.TargetID)
+                        .Distinct()
+                        .Count();
+                    reportRow.Magic = 0;
+                    reportRow.Other = 0;
+                    reportRow.Detail1Text = first.Timestamp.ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
+                    reportRow.Detail2Text = last.Timestamp.ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
+                    reportRow.Detail3Text = fightsUsed.ToString("N0", CultureInfo.InvariantCulture);
+                    reportRow.Detail4Text = reportRow.WeaponSkills.ToString("N0", CultureInfo.InvariantCulture);
+                    reportRow.TopAction = uses.ToString("N0", CultureInfo.InvariantCulture) + " recorded use" +
+                                    (uses == 1 ? string.Empty : "s") + " of " + itemGroup.Key;
+                    reportRow.Accuracy = "First use: " + reportRow.Detail1Text;
+                    reportRow.CriticalRate = "Last use: " + reportRow.Detail2Text;
+                    rows.Add(reportRow);
+                }
+            }
+
+            return rows;
         }
 
         private static List<SanctumCombatantSnapshot> BuildLootSummary(
@@ -2060,6 +2184,379 @@ namespace WaywardGamers.KParser.Bridge
             return result;
         }
 
+        private sealed class TimelineBattleSegment
+        {
+            internal KPDatabaseDataSet.BattlesRow Battle { get; set; }
+            internal double OffsetSeconds { get; set; }
+            internal double DurationSeconds { get; set; }
+        }
+
+        private sealed class TimelineBucket
+        {
+            internal long Damage { get; set; }
+            internal long Melee { get; set; }
+            internal long WeaponSkills { get; set; }
+            internal long Magic { get; set; }
+            internal long Other { get; set; }
+        }
+
+        private static List<SanctumCombatantSnapshot> BuildDamageTimeline(
+            IList<KPDatabaseDataSet.BattlesRow> battles,
+            IEnumerable<KPDatabaseDataSet.InteractionsRow> events,
+            IDictionary<int, int> enemyIds,
+            string combatantScope,
+            bool parserRunning)
+        {
+            List<TimelineBattleSegment> segments = new List<TimelineBattleSegment>();
+            double totalDuration = 0.0;
+            foreach (KPDatabaseDataSet.BattlesRow battle in battles
+                .OrderBy(item => item.StartTime)
+                .ThenBy(item => item.BattleID))
+            {
+                double battleDuration = GetDurationSeconds(
+                    battle,
+                    battle.GetInteractionsRows(),
+                    parserRunning);
+                if (double.IsNaN(battleDuration) || double.IsInfinity(battleDuration) ||
+                    battleDuration < 1.0)
+                {
+                    battleDuration = 1.0;
+                }
+                segments.Add(new TimelineBattleSegment
+                {
+                    Battle = battle,
+                    OffsetSeconds = totalDuration,
+                    DurationSeconds = battleDuration
+                });
+                totalDuration += battleDuration;
+            }
+
+            if (segments.Count == 0)
+                return new List<SanctumCombatantSnapshot>();
+
+            int intervalSeconds = GetTimelineIntervalSeconds(totalDuration);
+            double requestedBuckets = Math.Ceiling(totalDuration / intervalSeconds);
+            int bucketCount = double.IsNaN(requestedBuckets) || double.IsInfinity(requestedBuckets)
+                ? 72
+                : (int)Math.Max(1.0, Math.Min(72.0, requestedBuckets));
+            TimelineBucket[] buckets = Enumerable.Range(0, bucketCount)
+                .Select(index => new TimelineBucket())
+                .ToArray();
+            Dictionary<int, TimelineBattleSegment> segmentsByBattle = segments
+                .ToDictionary(item => item.Battle.BattleID);
+            KPDatabaseDataSet.InteractionsRow[] eventRows = events.ToArray();
+            HashSet<int> eligibleActorIds = new HashSet<int>(eventRows
+                .Where(row => !row.IsActorIDNull() && row.CombatantsRowByActorCombatantRelation != null)
+                .GroupBy(row => row.ActorID)
+                .Where(group =>
+                {
+                    KPDatabaseDataSet.CombatantsRow actor =
+                        group.First().CombatantsRowByActorCombatantRelation;
+                    EntityType entityType = (EntityType)actor.CombatantType;
+                    return IsDamageActor(entityType) &&
+                           IsInCombatantScope(actor, entityType, group, combatantScope);
+                })
+                .Select(group => group.Key));
+
+            foreach (KPDatabaseDataSet.InteractionsRow interaction in eventRows)
+            {
+                if (interaction.IsActorIDNull() || interaction.IsTargetIDNull() ||
+                    interaction.IsBattleIDNull() || !enemyIds.ContainsKey(interaction.BattleID) ||
+                    interaction.TargetID != enemyIds[interaction.BattleID] ||
+                    !segmentsByBattle.ContainsKey(interaction.BattleID))
+                {
+                    continue;
+                }
+
+                if (!eligibleActorIds.Contains(interaction.ActorID))
+                    continue;
+
+                long primary = GetPrimaryOutgoingDamage(interaction);
+                long secondary = ((HarmType)interaction.SecondHarmType == HarmType.Damage ||
+                                  (HarmType)interaction.SecondHarmType == HarmType.Drain)
+                    ? interaction.SecondAmount
+                    : 0;
+                long damage = primary + secondary;
+                if (damage <= 0)
+                    continue;
+
+                TimelineBattleSegment segment = segmentsByBattle[interaction.BattleID];
+                double battleOffset = Math.Max(
+                    0.0,
+                    Math.Min(segment.DurationSeconds, (interaction.Timestamp - segment.Battle.StartTime).TotalSeconds));
+                int bucketIndex = Math.Min(
+                    bucketCount - 1,
+                    Math.Max(0, (int)Math.Floor((segment.OffsetSeconds + battleOffset) / intervalSeconds)));
+                TimelineBucket bucket = buckets[bucketIndex];
+                bucket.Damage += damage;
+                switch ((ActionType)interaction.ActionType)
+                {
+                    case ActionType.Melee:
+                        bucket.Melee += primary;
+                        break;
+                    case ActionType.Weaponskill:
+                        bucket.WeaponSkills += primary;
+                        break;
+                    case ActionType.Spell:
+                        bucket.Magic += primary;
+                        break;
+                    default:
+                        bucket.Other += primary;
+                        break;
+                }
+                bucket.Other += secondary;
+            }
+
+            List<SanctumCombatantSnapshot> rows = new List<SanctumCombatantSnapshot>();
+            long cumulative = 0;
+            for (int index = 0; index < buckets.Length; index++)
+            {
+                TimelineBucket bucket = buckets[index];
+                cumulative += bucket.Damage;
+                double bucketStart = index * intervalSeconds;
+                double bucketEnd = Math.Min(totalDuration, bucketStart + intervalSeconds);
+                double bucketDuration = Math.Max(1.0, bucketEnd - bucketStart);
+                rows.Add(new SanctumCombatantSnapshot
+                {
+                    Key = "timeline:" + index.ToString(CultureInfo.InvariantCulture),
+                    Rank = index + 1,
+                    Name = FormatFilterDuration(bucketEnd),
+                    Job = intervalSeconds.ToString(CultureInfo.InvariantCulture) + "s interval",
+                    CombatantType = "Timeline",
+                    Damage = bucket.Damage,
+                    Dps = bucket.Damage / bucketDuration,
+                    Melee = bucket.Melee,
+                    WeaponSkills = bucket.WeaponSkills,
+                    Magic = bucket.Magic,
+                    Other = bucket.Other,
+                    RateText = (bucket.Damage / bucketDuration).ToString("N1", CultureInfo.InvariantCulture),
+                    TopAction = "Cumulative damage: " + cumulative.ToString("N0", CultureInfo.InvariantCulture),
+                    Accuracy = "Interval " + FormatFilterDuration(bucketStart) + " - " + FormatFilterDuration(bucketEnd),
+                    CriticalRate = bucket.Damage == 0 ? "No observed damage" : "Observed combat-log damage"
+                });
+            }
+
+            return rows;
+        }
+
+        private static int GetTimelineIntervalSeconds(double durationSeconds)
+        {
+            if (double.IsNaN(durationSeconds) || double.IsInfinity(durationSeconds) ||
+                durationSeconds <= 0.0)
+            {
+                return 5;
+            }
+
+            int[] intervals = { 5, 10, 15, 30, 60, 120, 300, 600 };
+            foreach (int interval in intervals)
+            {
+                if (durationSeconds / interval <= 72.0)
+                    return interval;
+            }
+            double minutes = Math.Ceiling(durationSeconds / 72.0 / 60.0);
+            if (minutes >= int.MaxValue / 60.0)
+                return int.MaxValue;
+            return Math.Max(600, (int)minutes * 60);
+        }
+
+        private static List<SanctumCombatantSnapshot> BuildWeaponSkillRates(
+            KPDatabaseDataSet dataSet,
+            IList<KPDatabaseDataSet.BattlesRow> battles,
+            IEnumerable<KPDatabaseDataSet.InteractionsRow> events,
+            IDictionary<int, int> enemyIds,
+            string combatantScope)
+        {
+            KPDatabaseDataSet.InteractionsRow[] eventRows = events.ToArray();
+            List<KPDatabaseDataSet.ChatMessagesRow> tpEchoes = dataSet.ChatMessages
+                .Where(message => message.ChatSpeakersRow != null &&
+                                  string.Equals(message.ChatSpeakersRow.SpeakerName, "-Echo-", StringComparison.Ordinal) &&
+                                  TpReturnEcho.IsMatch(message.Message ?? string.Empty))
+                .ToList();
+            List<SanctumCombatantSnapshot> rows = new List<SanctumCombatantSnapshot>();
+
+            foreach (IGrouping<int, KPDatabaseDataSet.InteractionsRow> actorGroup in eventRows
+                .Where(row => !row.IsActorIDNull() && !row.IsBattleIDNull() &&
+                              !row.IsTargetIDNull() && enemyIds.ContainsKey(row.BattleID) &&
+                              row.TargetID == enemyIds[row.BattleID])
+                .GroupBy(row => row.ActorID))
+            {
+                KPDatabaseDataSet.CombatantsRow actor =
+                    actorGroup.First().CombatantsRowByActorCombatantRelation;
+                if (actor == null)
+                    continue;
+                EntityType entityType = (EntityType)actor.CombatantType;
+                KPDatabaseDataSet.InteractionsRow[] actorEvents = actorGroup.ToArray();
+                if (!IsFriendlyCombatant(entityType) ||
+                    !IsInCombatantScope(actor, entityType, actorEvents, combatantScope))
+                {
+                    continue;
+                }
+
+                KPDatabaseDataSet.InteractionsRow[] weaponSkills = actorEvents
+                    .Where(row => (ActionType)row.ActionType == ActionType.Weaponskill &&
+                                  !row.Preparing && IsCompletedDamage(row, ActionType.Weaponskill))
+                    .OrderBy(row => row.InteractionID)
+                    .ToArray();
+                if (weaponSkills.Length == 0)
+                    continue;
+
+                List<int> meleeBuckets = new List<int>();
+                List<int> rangedBuckets = new List<int>();
+                List<int> retaliationBuckets = new List<int>();
+                List<double> intervals = new List<double>();
+
+                foreach (IGrouping<int, KPDatabaseDataSet.InteractionsRow> battleGroup in actorEvents
+                    .GroupBy(row => row.BattleID))
+                {
+                    KPDatabaseDataSet.InteractionsRow[] battleEvents = battleGroup
+                        .OrderBy(row => row.InteractionID)
+                        .ToArray();
+                    KPDatabaseDataSet.InteractionsRow[] battleWeaponSkills = battleEvents
+                        .Where(row => (ActionType)row.ActionType == ActionType.Weaponskill &&
+                                      !row.Preparing && IsCompletedDamage(row, ActionType.Weaponskill))
+                        .ToArray();
+                    int previousWeaponSkillId = int.MinValue;
+                    DateTime? previousWeaponSkillTime = null;
+                    foreach (KPDatabaseDataSet.InteractionsRow weaponSkill in battleWeaponSkills)
+                    {
+                        KPDatabaseDataSet.InteractionsRow[] feed = battleEvents
+                            .Where(row => row.InteractionID > previousWeaponSkillId &&
+                                          row.InteractionID < weaponSkill.InteractionID)
+                            .ToArray();
+                        meleeBuckets.Add(feed.Count(row =>
+                            ((ActionType)row.ActionType == ActionType.Melee ||
+                             (ActionType)row.ActionType == ActionType.Retaliation) &&
+                            IsTpFeedHit(row)));
+                        rangedBuckets.Add(feed.Count(row =>
+                            (ActionType)row.ActionType == ActionType.Ranged && IsTpFeedHit(row)));
+                        retaliationBuckets.Add(feed.Count(row =>
+                            (ActionType)row.ActionType == ActionType.Retaliation && IsTpFeedHit(row)));
+                        if (previousWeaponSkillTime.HasValue)
+                        {
+                            intervals.Add(Math.Max(
+                                0.0,
+                                (weaponSkill.Timestamp - previousWeaponSkillTime.Value).TotalSeconds));
+                        }
+                        previousWeaponSkillId = weaponSkill.InteractionID;
+                        previousWeaponSkillTime = weaponSkill.Timestamp;
+                    }
+                }
+
+                int[] totalFeed = meleeBuckets.Zip(rangedBuckets, (melee, ranged) => melee + ranged).ToArray();
+                double averageInterval = intervals.Count == 0 ? 0.0 : intervals.Average();
+                double averageMelee = meleeBuckets.Count == 0 ? 0.0 : meleeBuckets.Average();
+                double averageRanged = rangedBuckets.Count == 0 ? 0.0 : rangedBuckets.Average();
+                double medianFeed = GetMedian(totalFeed);
+                int modeFeed = GetMode(totalFeed);
+                int minFeed = totalFeed.Length == 0 ? 0 : totalFeed.Min();
+                int maxFeed = totalFeed.Length == 0 ? 0 : totalFeed.Max();
+                IGrouping<string, KPDatabaseDataSet.InteractionsRow> topWeaponSkill = weaponSkills
+                    .GroupBy(GetActionName)
+                    .OrderByDescending(group => group.Count())
+                    .ThenBy(group => group.Key)
+                    .First();
+                int[] tpReturns = actorEvents.Any(row => (ActorPlayerType)row.ActorType == ActorPlayerType.Self)
+                    ? weaponSkills.Select(weaponSkill => FindTpReturn(weaponSkill, tpEchoes))
+                        .Where(value => value >= 0)
+                        .ToArray()
+                    : new int[0];
+
+                SanctumCombatantSnapshot reportRow = CreateCombatant(actor, entityType);
+                reportRow.Damage = weaponSkills.Length;
+                reportRow.Dps = averageInterval;
+                reportRow.Melee = meleeBuckets.Sum();
+                reportRow.WeaponSkills = rangedBuckets.Sum();
+                reportRow.Magic = (long)Math.Round(medianFeed);
+                reportRow.Other = modeFeed;
+                reportRow.PhysicalAttempts = intervals.Count;
+                reportRow.RateText = intervals.Count == 0 ? "-" : FormatRateInterval(averageInterval);
+                reportRow.Detail1Text = averageMelee.ToString("0.0", CultureInfo.InvariantCulture);
+                reportRow.Detail2Text = averageRanged.ToString("0.0", CultureInfo.InvariantCulture);
+                reportRow.Detail3Text = medianFeed.ToString("0.0", CultureInfo.InvariantCulture);
+                reportRow.Detail4Text = modeFeed.ToString(CultureInfo.InvariantCulture);
+                reportRow.TopAction = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Successful attack feed per WS: {0:N0} min / {1:0.0} median / {2:N0} max; {3:N0} retaliation hit{4}",
+                    minFeed,
+                    medianFeed,
+                    maxFeed,
+                    retaliationBuckets.Sum(),
+                    retaliationBuckets.Sum() == 1 ? string.Empty : "s");
+                reportRow.Accuracy = "Top WS: " + topWeaponSkill.Key + " (" +
+                                     topWeaponSkill.Count().ToString("N0", CultureInfo.InvariantCulture) + ")";
+                reportRow.CriticalRate = tpReturns.Length > 0
+                    ? "Recorded TP return: " + tpReturns.Average().ToString("0.0", CultureInfo.InvariantCulture) +
+                      "% (" + tpReturns.Length.ToString("N0", CultureInfo.InvariantCulture) + " echoes)"
+                    : "Attack counts are a TP-cycle proxy; /echo KParser: <tp> WS TP records actual return";
+                rows.Add(reportRow);
+            }
+
+            return rows;
+        }
+
+        private static bool IsTpFeedHit(KPDatabaseDataSet.InteractionsRow row)
+        {
+            HarmType harmType = (HarmType)row.HarmType;
+            DefenseType defenseType = (DefenseType)row.DefenseType;
+            return (harmType == HarmType.Damage || harmType == HarmType.Drain || harmType == HarmType.Heal) &&
+                   (defenseType == DefenseType.None || defenseType == DefenseType.Absorb);
+        }
+
+        private static int FindTpReturn(
+            KPDatabaseDataSet.InteractionsRow weaponSkill,
+            IEnumerable<KPDatabaseDataSet.ChatMessagesRow> echoes)
+        {
+            foreach (KPDatabaseDataSet.ChatMessagesRow echo in echoes
+                .Where(message => Math.Abs((message.Timestamp - weaponSkill.Timestamp).TotalSeconds) <= 5.0)
+                .OrderBy(message => Math.Abs((message.Timestamp - weaponSkill.Timestamp).TotalSeconds)))
+            {
+                Match match = TpReturnEcho.Match(echo.Message ?? string.Empty);
+                int value;
+                if (match.Success && int.TryParse(
+                        match.Groups["tp"].Value,
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out value) && value >= 0 && value < 100)
+                {
+                    return value;
+                }
+            }
+            return -1;
+        }
+
+        private static double GetMedian(IEnumerable<int> values)
+        {
+            int[] ordered = values.OrderBy(value => value).ToArray();
+            if (ordered.Length == 0)
+                return 0.0;
+            int midpoint = ordered.Length / 2;
+            return ordered.Length % 2 == 0
+                ? (ordered[midpoint - 1] + ordered[midpoint]) / 2.0
+                : ordered[midpoint];
+        }
+
+        private static int GetMode(IEnumerable<int> values)
+        {
+            IGrouping<int, int> mode = values
+                .GroupBy(value => value)
+                .OrderByDescending(group => group.Count())
+                .ThenBy(group => group.Key)
+                .FirstOrDefault();
+            return mode == null ? 0 : mode.Key;
+        }
+
+        private static string FormatRateInterval(double seconds)
+        {
+            TimeSpan interval = TimeSpan.FromSeconds(Math.Max(0.0, seconds));
+            return interval.TotalMinutes >= 1.0
+                ? string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0}:{1:00.0}",
+                    (int)interval.TotalMinutes,
+                    interval.Seconds + interval.Milliseconds / 1000.0)
+                : interval.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture) + "s";
+        }
+
         private static List<SanctumCombatantSnapshot> BuildDamageDealt(
             IEnumerable<KPDatabaseDataSet.InteractionsRow> events,
             IDictionary<int, int> enemyIds,
@@ -2503,7 +3000,8 @@ namespace WaywardGamers.KParser.Bridge
             string combatantScope)
         {
             List<SanctumCombatantSnapshot> result = new List<SanctumCombatantSnapshot>();
-            var actorGroups = events
+            KPDatabaseDataSet.InteractionsRow[] allEvents = events.ToArray();
+            var actorGroups = allEvents
                 .Where(row => row.IsActorIDNull() == false &&
                               row.IsBattleIDNull() == false &&
                               row.IsTargetIDNull() == false &&
@@ -2526,11 +3024,11 @@ namespace WaywardGamers.KParser.Bridge
                     continue;
                 }
 
-                var rounds = actorEvents
+                var roundGroups = actorEvents
                     .OrderBy(row => row.Timestamp)
-                    .GroupBy(row => row.Timestamp)
-                    .Select(group => group.Count())
+                    .GroupBy(row => new { row.BattleID, row.Timestamp })
                     .ToArray();
+                int[] rounds = roundGroups.Select(group => group.Count()).ToArray();
                 if (rounds.Length == 0)
                     continue;
 
@@ -2538,24 +3036,63 @@ namespace WaywardGamers.KParser.Bridge
                 int two = rounds.Count(count => count == 2);
                 int three = rounds.Count(count => count == 3);
                 int fourPlus = rounds.Count(count => count >= 4);
-                int multi = two + three + fourPlus;
-                double multiRate = (double)multi * 100.0 / rounds.Length;
+                int inferredBaseAttacks = two > one ? 2 : 1;
+                int extraAttackRounds = rounds.Count(count => count > inferredBaseAttacks);
+                double multiRate = (double)extraAttackRounds * 100.0 / rounds.Length;
                 double average = rounds.Average();
+                int totalAttacks = rounds.Sum();
+                int successfulHits = actorEvents.Count(row => IsEvaded(row) == false);
+                int criticalHits = actorEvents.Count(row =>
+                    IsEvaded(row) == false &&
+                    (DamageModifier)row.DamageModifier == DamageModifier.Critical);
+                int extraAttacks = rounds.Sum(count => Math.Max(0, count - inferredBaseAttacks));
+                int zanshinCandidates = inferredBaseAttacks == 1
+                    ? roundGroups.Count(group =>
+                {
+                    KPDatabaseDataSet.InteractionsRow[] attacks = group
+                        .OrderBy(row => row.InteractionID)
+                        .ToArray();
+                    return attacks.Length >= 2 && IsEvaded(attacks[0]);
+                })
+                    : 0;
+                int retaliation = allEvents.Count(row => !row.IsActorIDNull() &&
+                    row.ActorID == actor.CombatantID && !row.IsBattleIDNull() &&
+                    enemyIds.ContainsKey(row.BattleID) && !row.IsTargetIDNull() &&
+                    row.TargetID == enemyIds[row.BattleID] &&
+                    (ActionType)row.ActionType == ActionType.Retaliation && IsTpFeedHit(row));
 
                 SanctumCombatantSnapshot reportRow = CreateCombatant(actor, entityType);
                 reportRow.Damage = rounds.Length;
                 reportRow.Dps = multiRate;
-                reportRow.Melee = one;
-                reportRow.WeaponSkills = two;
-                reportRow.Magic = three;
-                reportRow.Other = fourPlus;
+                reportRow.Melee = totalAttacks;
+                reportRow.WeaponSkills = extraAttacks;
+                reportRow.Magic = zanshinCandidates;
+                reportRow.Other = retaliation;
+                reportRow.PhysicalAttempts = actorEvents.Length;
+                reportRow.PhysicalHits = successfulHits;
+                reportRow.PhysicalMisses = Math.Max(0, actorEvents.Length - successfulHits);
+                reportRow.CriticalHits = criticalHits;
+                reportRow.ExtraAttackRounds = extraAttackRounds;
                 reportRow.RateText = multiRate.ToString("0.0", CultureInfo.InvariantCulture) + "%";
                 reportRow.TopAction = string.Format(
                     CultureInfo.InvariantCulture,
-                    "Inferred from timestamp-grouped melee events: {0:0.00} attacks per round",
-                    average);
-                reportRow.Accuracy = "Observed melee events: " + actorEvents.Length.ToString("N0", CultureInfo.InvariantCulture);
-                reportRow.CriticalRate = "Round inference; pet/retaliation events remain separate";
+                    "Inferred {0}-attack baseline; rounds: {1:N0} single / {2:N0} double / {3:N0} triple / {4:N0} four-plus - kick and multi-attack sources cannot be separated from chat alone",
+                    inferredBaseAttacks,
+                    one,
+                    two,
+                    three,
+                    fourPlus);
+                reportRow.Accuracy = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0:0.00} attacks/round from {1:N0} observed melee events",
+                    average,
+                    actorEvents.Length);
+                reportRow.CriticalRate = successfulHits == 0
+                    ? "Critical hit rate: -"
+                    : string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Critical hit rate: {0:0.0}%",
+                        (double)criticalHits * 100.0 / successfulHits);
                 result.Add(reportRow);
             }
 
@@ -3001,6 +3538,10 @@ namespace WaywardGamers.KParser.Bridge
                     reportRow.Dps = damage / Math.Max(1.0, activeSeconds);
                     reportRow.Melee = physical.Length;
                     reportRow.WeaponSkills = hits;
+                    reportRow.PhysicalAttempts = physical.Length;
+                    reportRow.PhysicalHits = hits;
+                    reportRow.PhysicalMisses = Math.Max(0, physical.Length - hits);
+                    reportRow.CriticalHits = criticals;
                     if (defensive)
                     {
                         int avoided = Math.Max(0, physical.Length - hits);
@@ -3030,13 +3571,18 @@ namespace WaywardGamers.KParser.Bridge
                     }
                     reportRow.TopAction = string.Format(
                         CultureInfo.InvariantCulture,
-                        "{0} measured during {1} of selected fight time",
+                        "{0} measured during {1} of selected fight time - correlation only",
                         defensive ? "Incoming performance" : "Outgoing performance",
                         FormatReportDuration(activeSeconds));
                     reportRow.Accuracy = defensive
                         ? "Observed avoidance includes evasion, shadows, parry and similar defenses"
                         : "Accuracy and critical rate use melee/ranged attempts while the buff was active";
-                    reportRow.CriticalRate = "Correlation view; it does not claim the buff caused every difference";
+                    reportRow.CriticalRate = hits == 0
+                        ? defensive ? "Incoming critical rate: -" : "Critical hit rate: -"
+                        : string.Format(
+                            CultureInfo.InvariantCulture,
+                            defensive ? "Incoming critical rate: {0:0.0}%" : "Critical hit rate: {0:0.0}%",
+                            (double)criticals * 100.0 / hits);
                     result.Add(reportRow);
                 }
             }
@@ -3659,6 +4205,8 @@ namespace WaywardGamers.KParser.Bridge
             string groupMode,
             double durationSeconds)
         {
+            bool displayPetsSeparately = IsPetDamageSeparated(combatantScope);
+            combatantScope = GetBaseCombatantScope(combatantScope);
             List<SanctumCombatantSnapshot> result = rows
                 .Where(row => string.Equals(
                     row.CombatantType,
@@ -3671,16 +4219,6 @@ namespace WaywardGamers.KParser.Bridge
                     EntityType.Pet.ToString(),
                     StringComparison.OrdinalIgnoreCase))
                 .ToList();
-
-            if (combatantScope == "pets")
-            {
-                foreach (SanctumCombatantSnapshot petRow in petRows)
-                    ApplySanctumPetDisplayName(petRow, dataSet);
-                return petRows;
-            }
-
-            if (combatantScope == "players")
-                return result;
 
             foreach (SanctumCombatantSnapshot petRow in petRows)
             {
@@ -3695,9 +4233,43 @@ namespace WaywardGamers.KParser.Bridge
                 KPDatabaseDataSet.CombatantsRow owner = ResolveSanctumPetOwner(
                     dataSet,
                     ownerReference);
+                if (displayPetsSeparately)
+                {
+                    ApplySanctumPetDisplayName(petRow, dataSet);
+                    result.Add(petRow);
+                    continue;
+                }
+
                 if (owner == null)
                 {
-                    result.Add(petRow);
+                    string provisionalOwner = GetProvisionalSanctumOwnerName(ownerReference);
+                    if (string.IsNullOrEmpty(provisionalOwner))
+                    {
+                        ApplySanctumPetDisplayName(petRow, dataSet);
+                        result.Add(petRow);
+                        continue;
+                    }
+
+                    SanctumCombatantSnapshot provisionalRow = result.FirstOrDefault(row =>
+                        string.Equals(row.Name, provisionalOwner, StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(row.CombatantType, EntityType.Player.ToString(), StringComparison.OrdinalIgnoreCase) &&
+                        (groupMode != "action" || string.Equals(row.Job, petRow.Job, StringComparison.Ordinal)));
+                    if (provisionalRow == null)
+                    {
+                        provisionalRow = CreateProvisionalOwnerCombatant(provisionalOwner);
+                        if (groupMode == "action")
+                        {
+                            provisionalRow.Key = provisionalRow.Key + "|" + (petRow.Job ?? string.Empty);
+                            provisionalRow.Job = petRow.Job;
+                        }
+                        result.Add(provisionalRow);
+                    }
+                    MergeSanctumPetDamage(
+                        provisionalRow,
+                        petRow,
+                        displayMode,
+                        groupMode,
+                        durationSeconds);
                     continue;
                 }
 
@@ -3740,11 +4312,20 @@ namespace WaywardGamers.KParser.Bridge
                 return;
 
             KPDatabaseDataSet.CombatantsRow owner = ResolveSanctumPetOwner(dataSet, ownerReference);
-            petRow.Name = owner == null
-                ? petName + " (owner " + ownerReference + ")"
-                : petName + " (" + owner.CombatantName + ")";
-            if (owner != null && petRow.Key.IndexOf('|') < 0)
-                petRow.Job = "Pet of " + owner.CombatantName;
+            string ownerName = owner == null
+                ? GetProvisionalSanctumOwnerName(ownerReference)
+                : owner.CombatantName;
+            if (string.IsNullOrEmpty(ownerName))
+            {
+                petRow.Name = petName + " (owner token " + ownerReference + ")";
+                if (petRow.Key.IndexOf('|') < 0)
+                    petRow.Job = "Pet - owner unresolved";
+                return;
+            }
+
+            petRow.Name = petName + " (" + ownerName + ")";
+            if (petRow.Key.IndexOf('|') < 0)
+                petRow.Job = "Pet of " + ownerName;
         }
 
         private static List<SanctumCombatantSnapshot> ApplyKParserBridgePetOwnership(
@@ -3755,6 +4336,8 @@ namespace WaywardGamers.KParser.Bridge
             string groupMode,
             double durationSeconds)
         {
+            bool displayPetsSeparately = IsPetDamageSeparated(combatantScope);
+            combatantScope = GetBaseCombatantScope(combatantScope);
             List<SanctumCombatantSnapshot> petRows = rows
                 .Where(row => string.Equals(
                     row.CombatantType,
@@ -3765,7 +4348,7 @@ namespace WaywardGamers.KParser.Bridge
                 .Where(row => petRows.Contains(row) == false)
                 .ToList();
 
-            if (combatantScope == "pets")
+            if (displayPetsSeparately)
             {
                 foreach (SanctumCombatantSnapshot petRow in petRows)
                 {
@@ -3777,11 +4360,9 @@ namespace WaywardGamers.KParser.Bridge
                             petRow.Job = "Pet of " + ownerName;
                     }
                 }
-                return petRows;
-            }
-
-            if (combatantScope == "players")
+                result.AddRange(petRows);
                 return result;
+            }
 
             foreach (SanctumCombatantSnapshot petRow in petRows)
             {
@@ -3802,7 +4383,26 @@ namespace WaywardGamers.KParser.Bridge
                     .ToList();
                 if (owners.Count != 1)
                 {
-                    result.Add(petRow);
+                    SanctumCombatantSnapshot provisionalRow = result.FirstOrDefault(row =>
+                        string.Equals(row.Name, ownerName, StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(row.CombatantType, EntityType.Player.ToString(), StringComparison.OrdinalIgnoreCase) &&
+                        (groupMode != "action" || string.Equals(row.Job, petRow.Job, StringComparison.Ordinal)));
+                    if (provisionalRow == null)
+                    {
+                        provisionalRow = CreateProvisionalOwnerCombatant(ownerName);
+                        if (groupMode == "action")
+                        {
+                            provisionalRow.Key = provisionalRow.Key + "|" + (petRow.Job ?? string.Empty);
+                            provisionalRow.Job = petRow.Job;
+                        }
+                        result.Add(provisionalRow);
+                    }
+                    MergeSanctumPetDamage(
+                        provisionalRow,
+                        petRow,
+                        displayMode,
+                        groupMode,
+                        durationSeconds);
                     continue;
                 }
 
@@ -3834,6 +4434,39 @@ namespace WaywardGamers.KParser.Bridge
             }
 
             return result;
+        }
+
+        private static SanctumCombatantSnapshot CreateProvisionalOwnerCombatant(string ownerName)
+        {
+            string currentPlayer = GetCurrentPlayerName();
+            return new SanctumCombatantSnapshot
+            {
+                Key = "pet-owner:" + ownerName.ToLowerInvariant(),
+                Name = ownerName,
+                Job = "-",
+                CombatantType = EntityType.Player.ToString(),
+                IsLocalPlayer = string.Equals(ownerName, currentPlayer, StringComparison.OrdinalIgnoreCase),
+                TopAction = "Pet damage only",
+                Accuracy = "-",
+                CriticalRate = "-"
+            };
+        }
+
+        private static string GetProvisionalSanctumOwnerName(string ownerReference)
+        {
+            if (string.IsNullOrEmpty(ownerReference))
+                return string.Empty;
+            if (SanctumPetName.LooksLikeOwnerToken(ownerReference) == false)
+                return ownerReference;
+
+            string currentPlayer = GetCurrentPlayerName();
+            return string.IsNullOrEmpty(currentPlayer) == false &&
+                   string.Equals(
+                       SanctumPetName.GetOwnerToken(currentPlayer),
+                       ownerReference,
+                       StringComparison.OrdinalIgnoreCase)
+                ? currentPlayer
+                : string.Empty;
         }
 
         private static KPDatabaseDataSet.CombatantsRow ResolveSanctumPetOwner(
@@ -3892,6 +4525,7 @@ namespace WaywardGamers.KParser.Bridge
             owner.PhysicalHits += pet.PhysicalHits;
             owner.PhysicalMisses += pet.PhysicalMisses;
             owner.CriticalHits += pet.CriticalHits;
+            owner.ExtraAttackRounds += pet.ExtraAttackRounds;
 
             if (displayMode == "multiattacks")
             {
@@ -3899,9 +4533,16 @@ namespace WaywardGamers.KParser.Bridge
                 owner.WeaponSkills += pet.WeaponSkills;
                 owner.Magic += pet.Magic;
                 owner.Other += pet.Other;
-                long multiRounds = owner.WeaponSkills + owner.Magic + owner.Other;
-                owner.Dps = owner.Damage == 0 ? 0.0 : (double)multiRounds * 100.0 / owner.Damage;
+                owner.Dps = owner.Damage == 0
+                    ? 0.0
+                    : (double)owner.ExtraAttackRounds * 100.0 / owner.Damage;
                 owner.RateText = owner.Dps.ToString("0.0", CultureInfo.InvariantCulture) + "%";
+                owner.CriticalRate = owner.PhysicalHits == 0
+                    ? "Critical hit rate: -"
+                    : string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Critical hit rate: {0:0.0}%",
+                        (double)owner.CriticalHits * 100.0 / owner.PhysicalHits);
             }
             else if (displayMode == "dots")
             {
@@ -4046,21 +4687,29 @@ namespace WaywardGamers.KParser.Bridge
             snapshot.CombatantFilters.Clear();
             if (snapshot.Report == "loot")
             {
+                bool itemUsage = snapshot.DisplayMode == "itemsused";
                 snapshot.CombatantFilters.Add(new SanctumCombatantFilterSnapshot
                 {
                     Key = "all",
-                    Label = "All recipients"
+                    Label = itemUsage ? "All players" : "All recipients"
                 });
 
                 HashSet<int> battleIds = new HashSet<int>(
                     battles.Select(battle => battle.BattleID));
-                foreach (string recipient in dataSet.Loot
-                    .Where(row => row.IsBattleIDNull() == false &&
-                                  battleIds.Contains(row.BattleID) &&
-                                  row.IsPlayerIDNull() == false &&
-                                  row.CombatantsRow != null &&
-                                  (EntityType)row.CombatantsRow.CombatantType == EntityType.Player)
-                    .Select(row => row.CombatantsRow.CombatantName)
+                IEnumerable<string> names = itemUsage
+                    ? events.Where(row => !row.IsActorIDNull() && !row.IsItemIDNull() &&
+                                          (AidType)row.AidType == AidType.Item &&
+                                          row.CombatantsRowByActorCombatantRelation != null &&
+                                          (EntityType)row.CombatantsRowByActorCombatantRelation.CombatantType == EntityType.Player)
+                        .Select(row => row.CombatantsRowByActorCombatantRelation.CombatantName)
+                    : dataSet.Loot
+                        .Where(row => row.IsBattleIDNull() == false &&
+                                      battleIds.Contains(row.BattleID) &&
+                                      row.IsPlayerIDNull() == false &&
+                                      row.CombatantsRow != null &&
+                                      (EntityType)row.CombatantsRow.CombatantType == EntityType.Player)
+                        .Select(row => row.CombatantsRow.CombatantName);
+                foreach (string recipient in names
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
                 {
@@ -4073,49 +4722,42 @@ namespace WaywardGamers.KParser.Bridge
                 return;
             }
 
-            snapshot.CombatantFilters.Add(new SanctumCombatantFilterSnapshot
-            {
-                Key = "all",
-                Label = snapshot.Report == "damageDealt"
-                    ? "Alliance (pets attributed)"
-                    : "Entire alliance"
-            });
-            snapshot.CombatantFilters.Add(new SanctumCombatantFilterSnapshot
-            {
-                Key = "party",
-                Label = snapshot.Report == "damageDealt"
-                    ? "Party (pets attributed)"
-                    : "Party only"
-            });
-            snapshot.CombatantFilters.Add(new SanctumCombatantFilterSnapshot
-            {
-                Key = "players",
-                Label = snapshot.Report == "damageDealt"
-                    ? "Player damage only"
-                    : "Players only"
-            });
-            if (snapshot.Report == "damageDealt")
-            {
-                snapshot.CombatantFilters.Add(new SanctumCombatantFilterSnapshot
-                {
-                    Key = "pets",
-                    Label = "Pet damage only"
-                });
-            }
+            snapshot.CombatantFilters.Add(new SanctumCombatantFilterSnapshot { Key = "all", Label = "Alliance" });
+            snapshot.CombatantFilters.Add(new SanctumCombatantFilterSnapshot { Key = "party", Label = "Party" });
+            snapshot.CombatantFilters.Add(new SanctumCombatantFilterSnapshot { Key = "self", Label = "Self" });
         }
 
-        private static bool HasPartyDamage(KPDatabaseDataSet.BattlesRow battle)
+        private static bool HasAllianceOrOwnedPetDamage(KPDatabaseDataSet.BattlesRow battle)
         {
             if (battle == null || battle.IsEnemyIDNull())
                 return false;
 
             return battle.GetInteractionsRows().Any(row =>
-                row.IsActorIDNull() == false &&
-                row.IsTargetIDNull() == false &&
-                row.TargetID == battle.EnemyID &&
-                GetOutgoingDamage(row) > 0 &&
-                ((ActorPlayerType)row.ActorType == ActorPlayerType.Self ||
-                 (ActorPlayerType)row.ActorType == ActorPlayerType.Party));
+            {
+                if (row.IsActorIDNull() || row.IsTargetIDNull() ||
+                    row.TargetID != battle.EnemyID || GetOutgoingDamage(row) <= 0)
+                {
+                    return false;
+                }
+
+                ActorPlayerType actorType = (ActorPlayerType)row.ActorType;
+                if (actorType == ActorPlayerType.Self ||
+                    actorType == ActorPlayerType.Party ||
+                    actorType == ActorPlayerType.Alliance)
+                {
+                    return true;
+                }
+
+                KPDatabaseDataSet.CombatantsRow actor =
+                    row.CombatantsRowByActorCombatantRelation;
+                return actor != null &&
+                       (EntityType)actor.CombatantType == EntityType.Pet &&
+                       IsInCombatantScope(
+                           actor,
+                           EntityType.Pet,
+                           battle.GetInteractionsRows(),
+                           "all");
+            });
         }
 
         private static List<KPDatabaseDataSet.BattlesRow> SelectBattles(
@@ -4194,8 +4836,16 @@ namespace WaywardGamers.KParser.Bridge
             if (report == "damageDealt" && displayMode == "multiattacks")
             {
                 long rounds = rows.Sum(row => row.Damage);
-                long multiRounds = rows.Sum(row => row.WeaponSkills + row.Magic + row.Other);
+                long multiRounds = rows.Sum(row => row.ExtraAttackRounds);
                 return rounds == 0 ? 0.0 : (double)multiRounds * 100.0 / rounds;
+            }
+
+            if (report == "damageDealt" && displayMode == "wsrates")
+            {
+                long intervals = rows.Sum(row => row.PhysicalAttempts);
+                return intervals == 0
+                    ? 0.0
+                    : rows.Sum(row => row.Dps * row.PhysicalAttempts) / intervals;
             }
 
             if (report == "experience")
@@ -4228,17 +4878,46 @@ namespace WaywardGamers.KParser.Bridge
             string groupMode)
         {
             SanctumReportColumnsSnapshot columns = SanctumReportColumnsSnapshot.CreateDamageDealt();
-            if (displayMode == "multiattacks")
+            if (displayMode == "timeline")
+            {
+                columns.Name = "Elapsed";
+                columns.Secondary = "Interval";
+                columns.Primary = "Interval damage";
+                columns.Share = "Damage share";
+                columns.Rate = "Interval DPS";
+                columns.Detail1 = "Melee";
+                columns.Detail2 = "Weapon skills";
+                columns.Detail3 = "Magic";
+                columns.Detail4 = "Other";
+                columns.Total = "OBSERVED DAMAGE";
+                columns.TotalRate = "AVERAGE DPS";
+            }
+            else if (displayMode == "wsrates")
+            {
+                columns.Name = "Player";
+                columns.Secondary = "Job";
+                columns.Primary = "Weapon skills";
+                columns.Share = "WS share";
+                columns.Rate = "Avg interval";
+                columns.Detail1 = "Melee / WS";
+                columns.Detail2 = "Ranged / WS";
+                columns.Detail3 = "Median attacks";
+                columns.Detail4 = "Most common";
+                columns.Total = "WEAPON SKILLS";
+                columns.TotalRate = "AVERAGE WS INTERVAL";
+                columns.RateSuffix = "s";
+            }
+            else if (displayMode == "multiattacks")
             {
                 columns.Primary = "Attack rounds";
                 columns.Share = "Round share";
-                columns.Rate = "Multi-hit rate";
-                columns.Detail1 = "1 attack";
-                columns.Detail2 = "2 attacks";
-                columns.Detail3 = "3 attacks";
-                columns.Detail4 = "4+ attacks";
+                columns.Rate = "Extra-attack rate";
+                columns.Detail1 = "Total attacks";
+                columns.Detail2 = "Extra attacks";
+                columns.Detail3 = "Zanshin candidates";
+                columns.Detail4 = "Retaliations";
                 columns.Total = "INFERRED ATTACK ROUNDS";
-                columns.TotalRate = "MULTI-HIT ROUND RATE";
+                columns.TotalRate = "EXTRA-ATTACK ROUND RATE";
                 columns.RateSuffix = "%";
             }
             else if (displayMode == "dots")
@@ -4632,6 +5311,24 @@ namespace WaywardGamers.KParser.Bridge
 
         private static SanctumReportColumnsSnapshot CreateLootColumns(string displayMode)
         {
+            if (displayMode == "itemsused")
+            {
+                return new SanctumReportColumnsSnapshot
+                {
+                    Name = "Player",
+                    Secondary = "Item",
+                    Primary = "Uses",
+                    Share = "Use share",
+                    Rate = "Per fight",
+                    Detail1 = "First use",
+                    Detail2 = "Last use",
+                    Detail3 = "Fights used",
+                    Detail4 = "Targets",
+                    Total = "ITEMS USED",
+                    TotalRate = "USES / FIGHT",
+                    RateSuffix = string.Empty
+                };
+            }
             if (displayMode == "helm")
             {
                 return new SanctumReportColumnsSnapshot
@@ -4874,6 +5571,10 @@ namespace WaywardGamers.KParser.Bridge
             string scope = string.IsNullOrEmpty(requestedScope)
                 ? "all"
                 : requestedScope.Trim().ToLowerInvariant();
+            bool separatePetRows = report == "damageDealt" &&
+                                   scope.EndsWith(SeparatePetRowsSuffix, StringComparison.Ordinal);
+            if (separatePetRows)
+                scope = scope.Substring(0, scope.Length - SeparatePetRowsSuffix.Length);
             if (report == "loot" && scope.StartsWith("recipient:", StringComparison.Ordinal) &&
                 scope.Length > "recipient:".Length && scope.Length <= 64)
             {
@@ -4884,9 +5585,10 @@ namespace WaywardGamers.KParser.Bridge
             {
                 return scope;
             }
-            return scope == "party" || scope == "players" || scope == "pets"
-                ? scope
-                : "all";
+            if (scope == "players")
+                scope = "self";
+            string normalized = scope == "party" || scope == "self" ? scope : "all";
+            return separatePetRows ? normalized + SeparatePetRowsSuffix : normalized;
         }
 
         private static string NormalizeDisplayMode(string report, string requestedMode)
@@ -4905,7 +5607,8 @@ namespace WaywardGamers.KParser.Bridge
                            mode == "weaponskills" || mode == "abilities" ||
                            mode == "magic" || mode == "skillchains" ||
                            mode == "additional" || mode == "reactive" ||
-                           mode == "dots" || mode == "multiattacks"
+                           mode == "dots" || mode == "multiattacks" ||
+                           mode == "timeline" || mode == "wsrates"
                         ? mode
                         : "summary";
                 case "damageTaken":
@@ -4941,7 +5644,8 @@ namespace WaywardGamers.KParser.Bridge
                         : "all";
                 case "loot":
                     return mode == "distribution" || mode == "rates" ||
-                           mode == "treasurehunter" || mode == "helm"
+                           mode == "treasurehunter" || mode == "helm" ||
+                           mode == "itemsused"
                         ? mode
                         : "summary";
                 case "crafting":
@@ -5023,25 +5727,140 @@ namespace WaywardGamers.KParser.Bridge
             IEnumerable<KPDatabaseDataSet.InteractionsRow> events,
             string scope)
         {
-            if (scope == "players")
-                return entityType == EntityType.Player;
-
-            if (scope == "pets")
-                return entityType == EntityType.Pet;
-
-            if (scope != "party")
-                return true;
+            scope = GetBaseCombatantScope(scope);
+            if (entityType == EntityType.Skillchain)
+                return scope == "all";
 
             if (entityType != EntityType.Player &&
                 entityType != EntityType.Pet &&
-                entityType != EntityType.Fellow)
+                entityType != EntityType.Fellow &&
+                entityType != EntityType.CharmedMob)
+            {
                 return false;
+            }
 
+            if (entityType == EntityType.Pet)
+            {
+                string ownerReference;
+                if (TryGetKnownPetOwnerReference(combatant.CombatantName, out ownerReference))
+                {
+                    KPDatabaseDataSet.CombatantsRow owner = ResolveKnownPetOwner(combatant, ownerReference);
+                    if (owner != null)
+                    {
+                        KPDatabaseDataSet.InteractionsRow[] ownerEvents =
+                            owner.GetInteractionsRowsByActorCombatantRelation();
+                        if (HasActorMembership(owner, ownerEvents, scope))
+                            return true;
+                        if (scope == "all" && ownerEvents.Length == 0)
+                            return true;
+                    }
+                    else if (scope == "all")
+                    {
+                        // The authoritative owner name is enough to begin the
+                        // encounter before the master's first player row exists.
+                        return true;
+                    }
+
+                    if (scope == "self" && IsCurrentPlayerReference(ownerReference))
+                        return true;
+                }
+            }
+
+            return HasActorMembership(combatant, events, scope);
+        }
+
+        private static bool HasActorMembership(
+            KPDatabaseDataSet.CombatantsRow combatant,
+            IEnumerable<KPDatabaseDataSet.InteractionsRow> events,
+            string scope)
+        {
             return events.Any(row =>
-                row.IsActorIDNull() == false &&
-                row.ActorID == combatant.CombatantID &&
-                ((ActorPlayerType)row.ActorType == ActorPlayerType.Self ||
-                 (ActorPlayerType)row.ActorType == ActorPlayerType.Party));
+            {
+                if (row.IsActorIDNull() || row.ActorID != combatant.CombatantID)
+                    return false;
+                ActorPlayerType actorType = (ActorPlayerType)row.ActorType;
+                if (scope == "self")
+                    return actorType == ActorPlayerType.Self;
+                if (scope == "party")
+                {
+                    return actorType == ActorPlayerType.Self ||
+                           actorType == ActorPlayerType.Party;
+                }
+                return actorType == ActorPlayerType.Self ||
+                       actorType == ActorPlayerType.Party ||
+                       actorType == ActorPlayerType.Alliance;
+            });
+        }
+
+        private static bool TryGetKnownPetOwnerReference(
+            string petName,
+            out string ownerReference)
+        {
+            ownerReference = string.Empty;
+            if (ServerCompatibility.IsSanctumXi)
+            {
+                string undecoratedPetName;
+                return SanctumPetName.TryParse(
+                    petName,
+                    out undecoratedPetName,
+                    out ownerReference);
+            }
+
+            return KParserBridgePetMappings.TryResolveOwner(petName, out ownerReference);
+        }
+
+        private static KPDatabaseDataSet.CombatantsRow ResolveKnownPetOwner(
+            KPDatabaseDataSet.CombatantsRow pet,
+            string ownerReference)
+        {
+            KPDatabaseDataSet dataSet = pet.Table.DataSet as KPDatabaseDataSet;
+            if (dataSet == null)
+                return null;
+            if (ServerCompatibility.IsSanctumXi)
+                return ResolveSanctumPetOwner(dataSet, ownerReference);
+
+            List<KPDatabaseDataSet.CombatantsRow> owners = dataSet.Combatants
+                .Where(row =>
+                    (EntityType)row.CombatantType == EntityType.Player &&
+                    string.Equals(row.CombatantName, ownerReference, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            return owners.Count == 1 ? owners[0] : null;
+        }
+
+        private static bool IsCurrentPlayerReference(string ownerReference)
+        {
+            string currentPlayer = GetCurrentPlayerName();
+            if (string.IsNullOrEmpty(currentPlayer))
+                return false;
+            return string.Equals(currentPlayer, ownerReference, StringComparison.OrdinalIgnoreCase) ||
+                   (SanctumPetName.LooksLikeOwnerToken(ownerReference) &&
+                    string.Equals(
+                        SanctumPetName.GetOwnerToken(currentPlayer),
+                        ownerReference,
+                        StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string GetCurrentPlayerName()
+        {
+            string capturedPlayer = SanctumDotProfileStore.CurrentPlayerName;
+            return string.IsNullOrEmpty(capturedPlayer)
+                ? ServerCompatibility.LocalPlayerName
+                : capturedPlayer;
+        }
+
+        private static string GetBaseCombatantScope(string scope)
+        {
+            if (string.IsNullOrEmpty(scope))
+                return "all";
+            return scope.EndsWith(SeparatePetRowsSuffix, StringComparison.Ordinal)
+                ? scope.Substring(0, scope.Length - SeparatePetRowsSuffix.Length)
+                : scope;
+        }
+
+        private static bool IsPetDamageSeparated(string scope)
+        {
+            return string.IsNullOrEmpty(scope) == false &&
+                   scope.EndsWith(SeparatePetRowsSuffix, StringComparison.Ordinal);
         }
 
         private static bool IsFriendlyCombatant(EntityType entityType)

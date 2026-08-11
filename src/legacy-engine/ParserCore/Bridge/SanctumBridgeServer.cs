@@ -216,6 +216,7 @@ namespace WaywardGamers.KParser.Bridge
             ServerCompatibility.Configure(
                 request.ServerProfile,
                 request.PetMappingPath);
+            ServerCompatibility.ConfigureLocalPlayer(request.LocalPlayerName);
 
             if (string.Equals(request.Type, "snapshot", StringComparison.OrdinalIgnoreCase))
                 return serializer.Serialize(SanctumDamageSnapshotBuilder.Build(

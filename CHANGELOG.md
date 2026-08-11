@@ -4,6 +4,53 @@ All notable public changes should be documented here. Preview entries describe d
 
 ## Unreleased
 
+## Preview 26 - 0.26.0 - 2026
+
+### Added
+
+- Added a persistent **Options > Display Pet Damage Separately** toggle. Pet damage remains attributed to the master by default; separate rows identify the owning player when the mapping is available.
+- Added a persistent, always-on-top **True Overlay** live-monitor mode showing only player, damage, share, accuracy, and critical-hit rate, with a minimal drag strip and controls to return to the full monitor or close it.
+- Added visible critical-hit-rate columns to the live monitor and the main physical-damage reports, including damage dealt, damage taken, and player performance views.
+- Added **Tools > Diagnostics** with live dashboard/engine state, detected game clients, memory status, compatibility and pet-attribution state, registered DoT player, redacted support-report copying, and direct access to local logs.
+- Added application-wide diagnostic logging and guarded recovery for ordinary WPF and background-task failures while leaving fatal runtime failures untouched.
+- Added a dark/light WPF rendering smoke test for the damage timeline using live dynamic theme resources.
+
+### Changed
+
+- Simplified the combatant scope list to **Alliance**, **Party**, and **Self** on the main report and live monitor.
+- Renamed the DoT stat-capture action to **Register Player Stats** and the build snapshot action to **Save Parse** for clearer wording throughout the main window and live monitor.
+- Changed the **Live Monitor** action into a toggle: selecting it while the monitor is already open now closes the monitor.
+- Extended live-monitor text and CSV exports with critical-hit rate.
+
+### Fixed
+
+- Owned-pet damage now qualifies a fight immediately, so a pet can open the tracked encounter before its master deals direct damage.
+- Added provisional owner attribution so a fully identified pet can contribute to its master's row before the master's first combat action creates a player row.
+- Corrected multi-attack and defensive-buff report rows to retain their physical hit and critical-hit metrics while preserving their existing inferred-rate calculations.
+- Successful zero-damage Dia, Diaga, and Bio applications now register in calculated DoT totals and the Magic damage views instead of being discarded for lacking direct damage.
+- Hardened the damage timeline against collection changes, invalid render dimensions, negative/corrupt values, numeric overflow, and renderer exceptions so a graph failure displays a temporary fallback instead of terminating KParser; throttled failure details are retained in the local timeline diagnostic log.
+- Prevented the damage timeline from freezing pens and brushes backed by live theme resources, which previously caused an unhandled `This Freezable cannot be frozen` exception when the graph opened.
+- Guarded asynchronous dashboard startup and shutdown so engine initialization or cleanup errors cannot bypass normal UI reporting and close handling.
+- Extended regression coverage for rejected zero-damage Dia/Bio casts, pet-display scope boundaries, combined and separate pet physical rates, and critical-rate denominators and export surfaces.
+
+## Preview 25 - 0.25.0 - 2026
+
+### Added
+
+- Added startup and manual GitHub update checks with opt-in preview-channel support.
+- Added separate patch-note pages for every release between the installed and available versions.
+- Added verified Setup and Portable update flows with checksum validation and portable rollback protection.
+- Added an interactive interval and cumulative damage timeline with bounded adaptive time buckets.
+- Added weapon-skill pacing and TP-cycle analysis with attack-feed statistics and optional legacy TP-return echoes.
+- Added consumable item-use reporting with player filtering, searching, timestamps, fight counts, and target counts.
+- Added main-page DoT stat capture that works while parsing is stopped, remembers the local character, and safely confirms the character before reading stats.
+
+### Refined
+
+- Expanded inferred multi-attack reports with total attacks, extra attacks, Zanshin candidates, retaliation counts, attacks per round, and complete round distributions.
+- Renamed Item Drops to Items & Loot so drop reports, HELM, and consumable usage share one report family.
+- Preserved the Preview 24 Sanctum XI / Other compatibility boundary across every new report.
+
 ## Preview 24 - 0.24.0 - 2026
 
 ### Added

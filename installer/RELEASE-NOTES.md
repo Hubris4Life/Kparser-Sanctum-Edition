@@ -1,6 +1,6 @@
-# KParser - Sanctum Edition Preview 24
+# KParser - Sanctum Edition Preview 26
 
-Preview 24 adds selectable **Sanctum XI** and **Other** compatibility profiles. It preserves Sanctum's custom behavior while giving other servers conservative observed-log defaults and optional local pet-owner attribution.
+Preview 26 focuses on owner-aware pet reporting, physical critical-rate visibility, calculated DoT completeness, a more useful live overlay, and stability diagnostics. It retains Preview 25's complete report and update foundation while hardening the damage timeline and application error handling ahead of wider stability testing.
 
 ## Downloads
 
@@ -17,16 +17,29 @@ KParserBridge is included in both packages but is not installed or loaded automa
 
 - Automatic FFXI chat-memory detection for Sanctum/XiLoader
 - Modern dashboard and compact live monitor
+- Minimal always-on-top True Overlay with damage, share, accuracy, and critical rate
 - Running totals and individual-fight filtering
-- Damage, defense, healing, buffs, debuffs, EXP, HELM, crafting, chat, and item-drop reports
-- Accuracy, share, multi-attack, Corsair roll, DoT estimation, and build-comparison reports
+- Damage, defense, healing, buffs, debuffs, EXP, HELM, crafting, chat, item-drop, and consumable-use reports
+- Interactive interval and cumulative damage timeline with hover details
+- Weapon-skill pacing and TP-cycle proxy statistics, including optional legacy TP-return echoes
+- Expanded multi-attack round details, extra attacks, Zanshin candidates, and retaliation counts
+- Accuracy, share, Corsair roll, DoT estimation, and build-comparison reports
+- Owner-attributed pet totals by default with an optional separate pet row that identifies its master
+- Pet-initiated encounter tracking before the owner deals direct damage
+- Successful zero-damage Dia, Diaga, and Bio applications in calculated DoT and Magic reports
+- Main-page character registration and DoT stat capture without starting a parse
 - CSV export, party-summary support, player information, and dark/light themes
+- Automatic update checks at startup, manual checks under Help, and an optional preview-release channel
+- Separate patch-note pages when multiple versions are available
+- SHA-256-verified Setup and Portable update application with portable rollback protection
 - Server > Sanctum XI / Other with persistent, engine-level rule isolation
 - Clean parse boundary whenever the active server profile changes
 - Sanctum-only pet naming, calculated DoTs, and DoT stat capture limited to Sanctum XI
 - Optional passive KParserBridge pet-owner mapping for Other servers
 - Separate player-only and pet-only damage filters for reviewing each contribution
 - Tools > KParserBridge Addon with Ashita detection, manual selection, safe updates, and recoverable removal
+- Tools > Diagnostics with redacted support-report copying and direct access to local error logs
+- Hardened timeline rendering with dark/light theme regression coverage
 - XiLoader, Horizon Loader, PlayOnline, and FFXIMain client-window recognition
 
 ## Requirements and limitations
@@ -38,6 +51,7 @@ KParserBridge is included in both packages but is not installed or loaded automa
 - Other-server combat logs may differ and can still require a dedicated message adapter
 - KParserBridge requires Ashita v4; ambiguous visible pet names remain separate instead of being attributed unsafely
 - This preview is unsigned, so Windows SmartScreen may display an unknown-publisher warning
+- Update checks contact only the project's public GitHub Releases API and do not send parse data or analytics
 - Uninstalling the application does not automatically remove parse data stored under the current user's local application-data folder
 
 ## Privacy
@@ -48,4 +62,4 @@ KParser reads the locally running FFXI process and stores parser data on the sam
 
 KParser - Sanctum Edition is distributed under GNU GPL version 2 or later. It is based on KParser and preserves the original project notices. Matching source and modification history are available at:
 
-https://github.com/Hubris4Life/Kparser-Sanctum-Edition/releases/tag/v0.24.0-preview
+https://github.com/Hubris4Life/Kparser-Sanctum-Edition/releases/tag/v0.26.0-preview

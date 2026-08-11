@@ -20,6 +20,12 @@ internal sealed class AppSettings
         Height = 285
     };
 
+    public WindowPlacementSettings TrueOverlayCurrentFightWindow { get; set; } = new()
+    {
+        Width = 500,
+        Height = 240
+    };
+
     public string MainReport { get; set; } = "damageDealt";
     public string MainEncounterKey { get; set; } = "all:0:";
     public string MainCombatantScope { get; set; } = "all";
@@ -30,11 +36,18 @@ internal sealed class AppSettings
     public double CurrentFightBackgroundTransparencyPercent { get; set; }
     public bool CurrentFightAlwaysOnTop { get; set; }
     public bool CurrentFightCompactMode { get; set; }
+    public string CurrentFightDisplayMode { get; set; } = string.Empty;
     public bool CompactMonitorHeightOptimized { get; set; }
     public bool CurrentFightOpen { get; set; }
     public bool AutoDetectMemoryOnStartup { get; set; }
+    public bool AutomaticallyCheckForUpdates { get; set; } = true;
+    public bool IncludePrereleaseUpdates { get; set; } = true;
+    public string SkippedUpdateVersion { get; set; } = string.Empty;
     public bool IsLightMode { get; set; }
     public string ServerProfile { get; set; } = "sanctum";
+    public string LocalCharacterName { get; set; } = string.Empty;
+    public string DotStatCharacterName { get; set; } = string.Empty;
+    public bool DisplayPetDamageSeparately { get; set; }
     public string KParserBridgeAshitaRoot { get; set; } = string.Empty;
 }
 

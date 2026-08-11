@@ -41,6 +41,8 @@ The development run expects a compatible engine in the location handled by Engin
 
     dotnet run --project .\tests\PlayerComparisonSmoke\PlayerComparisonSmoke.csproj
     dotnet run --project .\tests\KParserBridgeInstallerSmoke\KParserBridgeInstallerSmoke.csproj
+    dotnet run --project .\tests\UpdateServiceSmoke\UpdateServiceSmoke.csproj
+    dotnet run --project .\tests\TimelineRenderSmoke\TimelineRenderSmoke.csproj
 
 PortableSmoke requires two arguments: the published portable assembly path and a disposable extraction directory. Run it only after producing a portable build.
 

@@ -8,6 +8,7 @@ namespace WaywardGamers.KParser.Bridge
         private static readonly object StateLock = new object();
         private static string currentProfile = "sanctum";
         private static string petMappingPath = string.Empty;
+        private static string localPlayerName = string.Empty;
 
         internal static string CurrentProfile
         {
@@ -37,6 +38,15 @@ namespace WaywardGamers.KParser.Bridge
             get { return IsSanctumXi; }
         }
 
+        internal static string LocalPlayerName
+        {
+            get
+            {
+                lock (StateLock)
+                    return localPlayerName;
+            }
+        }
+
         internal static void Configure(string requestedProfile, string requestedPetMappingPath)
         {
             string profile = NormalizeProfile(requestedProfile);
@@ -49,6 +59,18 @@ namespace WaywardGamers.KParser.Bridge
                 currentProfile = profile;
                 petMappingPath = mappingPath;
             }
+        }
+
+        internal static void ConfigureLocalPlayer(string requestedPlayerName)
+        {
+            string playerName = requestedPlayerName == null
+                ? string.Empty
+                : requestedPlayerName.Trim();
+            if (playerName.Length > 32)
+                playerName = string.Empty;
+
+            lock (StateLock)
+                localPlayerName = playerName;
         }
 
         internal static string NormalizeProfile(string requestedProfile)

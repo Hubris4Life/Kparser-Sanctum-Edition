@@ -33,7 +33,7 @@ Choose **Server > Sanctum XI** for Sanctum's server-specific pet names and calcu
 
 ## Optional KParserBridge addon for Other
 
-Preview 24 includes KParserBridge but does not install or load it automatically. SanctumChat is distributed separately by Sanctum.
+Preview 26 includes KParserBridge but does not install or load it automatically. SanctumChat is distributed separately by Sanctum.
 
 1. Select **Server > Other** and open **Tools > KParserBridge Addon**.
 2. Select a detected Ashita v4 installation, or click **Browse** and select its main folder or `addons` folder.

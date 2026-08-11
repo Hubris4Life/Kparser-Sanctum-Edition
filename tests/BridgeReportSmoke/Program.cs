@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -18,9 +19,23 @@ namespace BridgeReportSmoke
             if (args.Length == 1 && args[0] == "--pet-protocol-only")
             {
                 VerifySanctumPetProtocol();
+                VerifyPetFirstEncounterGate();
                 VerifyServerCompatibilityProfiles();
+                VerifyCriticalRateDenominators();
                 Console.WriteLine("sanctum-pet-protocol=verified");
+                Console.WriteLine("pet-first-encounter=verified");
                 Console.WriteLine("server-compatibility=verified");
+                Console.WriteLine("critical-rate-denominators=verified");
+                return 0;
+            }
+
+            if (args.Length == 1 && args[0] == "--dot-rules-only")
+            {
+                VerifyDotEstimatorRules();
+                VerifyExtendedDotEstimatorRules();
+                VerifyPlayerStatLayout();
+                Console.WriteLine("dot-estimator-rules=verified");
+                Console.WriteLine("player-stat-layout=verified");
                 return 0;
             }
 
@@ -34,7 +49,9 @@ namespace BridgeReportSmoke
 
             VerifyRamReaderStopsBeforeReturning();
             VerifyDotEstimatorRules();
+            VerifyExtendedDotEstimatorRules();
             VerifyPlayerStatLayout();
+            VerifyCriticalRateDenominators();
             ConfigureWritableDefaultDirectory(databasePath);
             DatabaseManager.Instance.OpenDatabase(databasePath);
             try
@@ -76,6 +93,7 @@ namespace BridgeReportSmoke
                 VerifyCraftingReport(build);
                 VerifyBuffUptimeReport(build);
                 VerifyAdvancedReports(build);
+                VerifyLegacyParityReports(build);
 
                 if (verifiedDisplays == 0)
                     throw new InvalidOperationException("The supplied parse contains no damage category to verify.");
@@ -90,6 +108,7 @@ namespace BridgeReportSmoke
                 Console.WriteLine("loot-reports=verified");
                 Console.WriteLine("buff-uptime=verified");
                 Console.WriteLine("current-preview-reports=verified");
+                Console.WriteLine("legacy-parity-reports=verified");
                 return 0;
             }
             finally
@@ -242,10 +261,12 @@ namespace BridgeReportSmoke
                 new object[] { combinedInput, dataSet, "all", "sources", "player", 10.0 });
             if (combined.Count != 1 ||
                 (string)GetSnapshotValue(combined[0], "Name") != ownerName ||
-                (long)GetSnapshotValue(combined[0], "Damage") != 1000L)
+                (long)GetSnapshotValue(combined[0], "Damage") != 1000L ||
+                (string)GetSnapshotValue(combined[0], "Accuracy") != "Accuracy: 86.7%" ||
+                (string)GetSnapshotValue(combined[0], "CriticalRate") != "Critical hit rate: 23.1%")
             {
                 throw new InvalidOperationException(
-                    "Pet damage was not attributed once to its owner.");
+                    "Pet damage or its combined physical rates were not attributed once to its owner.");
             }
 
             IList actionInput = CreatePetOwnershipRows(
@@ -275,31 +296,43 @@ namespace BridgeReportSmoke
                     "The action-grouped pet contribution was not merged correctly.");
             }
 
-            IList playerOnlyInput = CreatePetOwnershipRows(
+            IList separateInput = CreatePetOwnershipRows(
                 snapshotRowType,
                 "Garuda@Nazgul");
-            IList playerOnly = (IList)applyOwnership.Invoke(
+            IList separate = (IList)applyOwnership.Invoke(
                 null,
-                new object[] { playerOnlyInput, dataSet, "players", "sources", "player", 10.0 });
-            if (playerOnly.Count != 1 ||
-                (long)GetSnapshotValue(playerOnly[0], "Damage") != 700L)
+                new object[] { separateInput, dataSet, "all:petrows", "sources", "player", 10.0 });
+            object separateOwner = separate.Cast<object>().Single(row =>
+                (string)GetSnapshotValue(row, "CombatantType") == EntityType.Player.ToString());
+            object separatePet = separate.Cast<object>().Single(row =>
+                (string)GetSnapshotValue(row, "CombatantType") == EntityType.Pet.ToString());
+            if (separate.Count != 2 ||
+                (long)GetSnapshotValue(separateOwner, "Damage") != 700L ||
+                (string)GetSnapshotValue(separatePet, "Name") != "Garuda (Nazgul)" ||
+                (string)GetSnapshotValue(separatePet, "Job") != "Pet of Nazgul" ||
+                (long)GetSnapshotValue(separatePet, "Damage") != 300L ||
+                (string)GetSnapshotValue(separateOwner, "CriticalRate") != "Critical hit rate: 22.2%" ||
+                (string)GetSnapshotValue(separatePet, "CriticalRate") != "Critical hit rate: 25.0%")
             {
                 throw new InvalidOperationException(
-                    "The player-only filter included pet damage.");
+                    "Separate pet display did not preserve both the master and pet rows.");
             }
 
-            IList petOnlyInput = CreatePetOwnershipRows(
+            KPDatabaseDataSet noOwnerDataSet = new KPDatabaseDataSet();
+            IList provisionalInput = CreatePetOwnershipRows(
                 snapshotRowType,
-                "Garuda@Nazgul");
-            IList petOnly = (IList)applyOwnership.Invoke(
+                "Nazgul's Garuda");
+            provisionalInput.RemoveAt(0);
+            IList provisional = (IList)applyOwnership.Invoke(
                 null,
-                new object[] { petOnlyInput, dataSet, "pets", "sources", "player", 10.0 });
-            if (petOnly.Count != 1 ||
-                (string)GetSnapshotValue(petOnly[0], "Name") != "Garuda (Nazgul)" ||
-                (long)GetSnapshotValue(petOnly[0], "Damage") != 300L)
+                new object[] { provisionalInput, noOwnerDataSet, "all", "sources", "player", 10.0 });
+            if (provisional.Count != 1 ||
+                (string)GetSnapshotValue(provisional[0], "Name") != "Nazgul" ||
+                (string)GetSnapshotValue(provisional[0], "CombatantType") != EntityType.Player.ToString() ||
+                (long)GetSnapshotValue(provisional[0], "Damage") != 300L)
             {
                 throw new InvalidOperationException(
-                    "The pet-only filter did not preserve the raw pet contribution.");
+                    "Pet-first damage was not provisionally attributed before the master acted.");
             }
 
             IList expandedPetInput = CreatePetOwnershipRows(
@@ -388,6 +421,163 @@ namespace BridgeReportSmoke
             }
         }
 
+        private static void VerifyPetFirstEncounterGate()
+        {
+            Assembly parserCore = typeof(DatabaseManager).Assembly;
+            Type builder = parserCore.GetType(
+                "WaywardGamers.KParser.Bridge.SanctumDamageSnapshotBuilder",
+                true);
+            MethodInfo encounterGate = builder.GetMethod(
+                "HasAllianceOrOwnedPetDamage",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            if (encounterGate == null)
+                throw new MissingMethodException(builder.FullName, "HasAllianceOrOwnedPetDamage");
+
+            KPDatabaseDataSet data = new KPDatabaseDataSet();
+            KPDatabaseDataSet.CombatantsRow pet = data.Combatants.AddCombatantsRow(
+                "Nazgul's Garuda",
+                (byte)EntityType.Pet,
+                string.Empty);
+            KPDatabaseDataSet.CombatantsRow enemy = data.Combatants.AddCombatantsRow(
+                "Pet Test Target",
+                (byte)EntityType.Mob,
+                string.Empty);
+            DateTime start = new DateTime(2026, 8, 10, 20, 0, 0, DateTimeKind.Utc);
+            KPDatabaseDataSet.BattlesRow battle = data.Battles.AddBattlesRow(
+                enemy,
+                start,
+                start.AddMinutes(1),
+                false,
+                pet,
+                (byte)EntityType.Pet,
+                0,
+                0,
+                (byte)MobDifficulty.EvenMatch,
+                false);
+            data.Interactions.AddInteractionsRow(
+                start.AddSeconds(1), pet, enemy, battle,
+                (byte)ActorPlayerType.Other, false, null, (byte)ActionType.Melee,
+                (byte)FailedActionType.None, (byte)DefenseType.None, 0,
+                (byte)AidType.None, (byte)RecoveryType.None, (byte)HarmType.Damage, 250,
+                (byte)DamageModifier.None, (byte)AidType.None, (byte)RecoveryType.None,
+                (byte)HarmType.None, 0, null, null);
+
+            bool included = (bool)encounterGate.Invoke(null, new object[] { battle });
+            if (!included)
+                throw new InvalidOperationException("An owned pet's opening damage did not qualify the encounter.");
+
+            pet.CombatantName = "UnmappedNearbyPet";
+            bool unrelatedIncluded = (bool)encounterGate.Invoke(null, new object[] { battle });
+            if (unrelatedIncluded)
+                throw new InvalidOperationException("An unmapped outside pet incorrectly qualified the encounter.");
+        }
+
+        private static void VerifyCriticalRateDenominators()
+        {
+            Assembly parserCore = typeof(DatabaseManager).Assembly;
+            Type builder = parserCore.GetType(
+                "WaywardGamers.KParser.Bridge.SanctumDamageSnapshotBuilder",
+                true);
+            MethodInfo categoryRate = builder.GetMethod(
+                "GetDamageCategoryCriticalRate",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo combinedRate = builder.GetMethod(
+                "GetCriticalRate",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            if (categoryRate == null || combinedRate == null)
+                throw new MissingMemberException("Critical-rate helpers could not be tested.");
+
+            KPDatabaseDataSet data = new KPDatabaseDataSet();
+            KPDatabaseDataSet.CombatantsRow player = data.Combatants.AddCombatantsRow(
+                "Critical Tester",
+                (byte)EntityType.Player,
+                string.Empty);
+            KPDatabaseDataSet.CombatantsRow enemy = data.Combatants.AddCombatantsRow(
+                "Critical Target",
+                (byte)EntityType.Mob,
+                string.Empty);
+            DateTime start = new DateTime(2026, 8, 10, 21, 0, 0, DateTimeKind.Utc);
+            KPDatabaseDataSet.BattlesRow battle = data.Battles.AddBattlesRow(
+                enemy,
+                start,
+                start.AddSeconds(30),
+                true,
+                player,
+                (byte)EntityType.Player,
+                0,
+                0,
+                (byte)MobDifficulty.EvenMatch,
+                false);
+
+            var allRows = new List<KPDatabaseDataSet.InteractionsRow>();
+            VerifyCriticalCategory(
+                data, battle, player, enemy, start, ActionType.Melee, "melee", categoryRate, allRows);
+            VerifyCriticalCategory(
+                data, battle, player, enemy, start, ActionType.Ranged, "ranged", categoryRate, allRows);
+            VerifyCriticalCategory(
+                data, battle, player, enemy, start, ActionType.Weaponskill, "weaponskills", categoryRate, allRows);
+
+            string combined = (string)combinedRate.Invoke(null, new object[] { allRows });
+            if (combined != "Critical hit rate: 33.3%")
+            {
+                throw new InvalidOperationException(
+                    "Combined critical rate did not use successful melee/ranged hits: " + combined);
+            }
+        }
+
+        private static void VerifyCriticalCategory(
+            KPDatabaseDataSet data,
+            KPDatabaseDataSet.BattlesRow battle,
+            KPDatabaseDataSet.CombatantsRow actor,
+            KPDatabaseDataSet.CombatantsRow target,
+            DateTime timestamp,
+            ActionType actionType,
+            string displayMode,
+            MethodInfo categoryRate,
+            ICollection<KPDatabaseDataSet.InteractionsRow> allRows)
+        {
+            var rows = new List<KPDatabaseDataSet.InteractionsRow>
+            {
+                AddPhysicalTestInteraction(data, battle, actor, target, timestamp, actionType, 100, DamageModifier.Critical),
+                AddPhysicalTestInteraction(data, battle, actor, target, timestamp.AddSeconds(1), actionType, 90, DamageModifier.None),
+                AddPhysicalTestInteraction(data, battle, actor, target, timestamp.AddSeconds(2), actionType, 80, DamageModifier.None),
+                AddPhysicalTestInteraction(data, battle, actor, target, timestamp.AddSeconds(3), actionType, 0, DamageModifier.Critical)
+            };
+            foreach (var row in rows)
+                allRows.Add(row);
+
+            string rate = (string)categoryRate.Invoke(null, new object[] { rows, displayMode });
+            if (rate != "Critical rate: 33.3%")
+            {
+                throw new InvalidOperationException(
+                    displayMode + " critical rate counted misses or used the wrong denominator: " + rate);
+            }
+        }
+
+        private static KPDatabaseDataSet.InteractionsRow AddPhysicalTestInteraction(
+            KPDatabaseDataSet data,
+            KPDatabaseDataSet.BattlesRow battle,
+            KPDatabaseDataSet.CombatantsRow actor,
+            KPDatabaseDataSet.CombatantsRow target,
+            DateTime timestamp,
+            ActionType actionType,
+            int damage,
+            DamageModifier modifier)
+        {
+            string actionName = actionType.ToString();
+            KPDatabaseDataSet.ActionsRow action = data.Actions
+                .FirstOrDefault(row => row.ActionName == actionName) ??
+                data.Actions.AddActionsRow(actionName);
+            return data.Interactions.AddInteractionsRow(
+                timestamp, actor, target, battle, (byte)ActorType.Self, false, action,
+                (byte)actionType, (byte)FailedActionType.None,
+                (byte)(damage == 0 ? DefenseType.Evasion : DefenseType.None),
+                0, (byte)AidType.None, (byte)RecoveryType.None,
+                (byte)(damage == 0 ? HarmType.None : HarmType.Damage),
+                damage, (byte)modifier, (byte)AidType.None, (byte)RecoveryType.None,
+                (byte)HarmType.None, 0, null, null);
+        }
+
         private static IList CreatePetOwnershipRows(Type snapshotRowType, string petName)
         {
             Type listType = typeof(List<>).MakeGenericType(snapshotRowType);
@@ -405,6 +595,8 @@ namespace BridgeReportSmoke
             SetSnapshotValue(player, "PhysicalHits", 9L);
             SetSnapshotValue(player, "PhysicalMisses", 1L);
             SetSnapshotValue(player, "CriticalHits", 2L);
+            SetSnapshotValue(player, "Accuracy", "Accuracy: 90.0%");
+            SetSnapshotValue(player, "CriticalRate", "Critical hit rate: 22.2%");
             SetSnapshotValue(player, "TopAction", "Top action: Predator Claws");
 
             object pet = Activator.CreateInstance(snapshotRowType, true);
@@ -419,6 +611,8 @@ namespace BridgeReportSmoke
             SetSnapshotValue(pet, "PhysicalHits", 4L);
             SetSnapshotValue(pet, "PhysicalMisses", 1L);
             SetSnapshotValue(pet, "CriticalHits", 1L);
+            SetSnapshotValue(pet, "Accuracy", "Accuracy: 80.0%");
+            SetSnapshotValue(pet, "CriticalRate", "Critical hit rate: 25.0%");
             SetSnapshotValue(pet, "TopAction", "Top action: Burning Strike");
 
             rows.Add(player);
@@ -759,7 +953,7 @@ namespace BridgeReportSmoke
 
         private static void VerifyLootReports(MethodInfo build)
         {
-            foreach (string display in new[] { "summary", "distribution", "rates", "treasurehunter", "helm" })
+            foreach (string display in new[] { "summary", "distribution", "rates", "treasurehunter", "itemsused", "helm" })
             {
                 object snapshot = Build(build, "loot", display, "player");
                 string report = (string)snapshot.GetType().GetProperty("Report").GetValue(snapshot, null);
@@ -806,6 +1000,8 @@ namespace BridgeReportSmoke
             string[][] reports =
             {
                 new[] { "damageDealt", "multiattacks" },
+                new[] { "damageDealt", "timeline" },
+                new[] { "damageDealt", "wsrates" },
                 new[] { "damageTaken", "buffperformance" },
                 new[] { "healing", "recipients" },
                 new[] { "healing", "recovery" },
@@ -832,6 +1028,131 @@ namespace BridgeReportSmoke
                         "Current preview report failed metadata/runtime verification: " + item[0] + "/" + item[1] +
                         (string.IsNullOrEmpty(error) ? string.Empty : " - " + error));
                 }
+            }
+        }
+
+        private static void VerifyLegacyParityReports(MethodInfo build)
+        {
+            object timeline = Build(build, "damageDealt", "timeline", "player");
+            object timelineColumns = timeline.GetType().GetProperty("Columns").GetValue(timeline, null);
+            if ((string)timelineColumns.GetType().GetProperty("Primary").GetValue(timelineColumns, null) != "Interval damage")
+                throw new InvalidOperationException("Damage timeline columns were not applied.");
+
+            int previousRank = 0;
+            long intervalDamage = 0;
+            int intervalCount = 0;
+            foreach (object row in (IEnumerable)timeline.GetType().GetProperty("Combatants").GetValue(timeline, null))
+            {
+                int rank = (int)row.GetType().GetProperty("Rank").GetValue(row, null);
+                if (rank <= previousRank)
+                    throw new InvalidOperationException("Damage timeline intervals are not chronological.");
+                previousRank = rank;
+                intervalDamage += (long)row.GetType().GetProperty("Damage").GetValue(row, null);
+                intervalCount++;
+            }
+            if (intervalCount > 72)
+                throw new InvalidOperationException("Damage timeline exceeded its bounded interval count.");
+            if (intervalDamage != GetEncounterTotal(timeline))
+                throw new InvalidOperationException("Damage timeline interval totals do not match the encounter total.");
+
+            object wsRates = Build(build, "damageDealt", "wsrates", "player");
+            object wsColumns = wsRates.GetType().GetProperty("Columns").GetValue(wsRates, null);
+            if ((string)wsColumns.GetType().GetProperty("Rate").GetValue(wsColumns, null) != "Avg interval" ||
+                (string)wsColumns.GetType().GetProperty("Detail3").GetValue(wsColumns, null) != "Median attacks")
+            {
+                throw new InvalidOperationException("WS / TP cycle metadata is invalid.");
+            }
+            int wsRatePlayers = 0;
+            foreach (object row in (IEnumerable)wsRates.GetType().GetProperty("Combatants").GetValue(wsRates, null))
+            {
+                if ((long)row.GetType().GetProperty("Damage").GetValue(row, null) <= 0 ||
+                    string.IsNullOrEmpty((string)row.GetType().GetProperty("Detail1Text").GetValue(row, null)))
+                {
+                    throw new InvalidOperationException("A WS / TP cycle row has invalid values.");
+                }
+                wsRatePlayers++;
+            }
+
+            object multiAttacks = Build(build, "damageDealt", "multiattacks", "player");
+            object multiColumns = multiAttacks.GetType().GetProperty("Columns").GetValue(multiAttacks, null);
+            if ((string)multiColumns.GetType().GetProperty("Detail2").GetValue(multiColumns, null) != "Extra attacks" ||
+                (string)multiColumns.GetType().GetProperty("Detail3").GetValue(multiColumns, null) != "Zanshin candidates")
+            {
+                throw new InvalidOperationException("Expanded multi-attack metadata is invalid.");
+            }
+            int multiAttackPlayers = ((IEnumerable)multiAttacks.GetType()
+                .GetProperty("Combatants").GetValue(multiAttacks, null)).Cast<object>().Count();
+
+            object itemUsage = Build(build, "loot", "itemsused", "player");
+            object itemColumns = itemUsage.GetType().GetProperty("Columns").GetValue(itemUsage, null);
+            if ((string)itemColumns.GetType().GetProperty("Secondary").GetValue(itemColumns, null) != "Item" ||
+                (string)itemColumns.GetType().GetProperty("Primary").GetValue(itemColumns, null) != "Uses")
+            {
+                throw new InvalidOperationException("Consumable item-usage metadata is invalid.");
+            }
+            int itemUsageRows = ((IEnumerable)itemUsage.GetType()
+                .GetProperty("Combatants").GetValue(itemUsage, null)).Cast<object>().Count();
+            VerifySyntheticItemUsage(build.DeclaringType);
+            Console.WriteLine("timeline-intervals=" + intervalCount);
+            Console.WriteLine("ws-rate-players=" + wsRatePlayers);
+            Console.WriteLine("multi-attack-players=" + multiAttackPlayers);
+            Console.WriteLine("item-usage-rows=" + itemUsageRows);
+        }
+
+        private static void VerifySyntheticItemUsage(Type builderType)
+        {
+            MethodInfo itemUsageBuilder = builderType.GetMethod(
+                "BuildItemUsage",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            if (itemUsageBuilder == null)
+                throw new MissingMethodException(builderType.FullName, "BuildItemUsage");
+
+            KPDatabaseDataSet data = new KPDatabaseDataSet();
+            KPDatabaseDataSet.CombatantsRow player = data.Combatants.AddCombatantsRow(
+                "ItemTester",
+                (byte)EntityType.Player,
+                "[WAR99]");
+            KPDatabaseDataSet.CombatantsRow enemy = data.Combatants.AddCombatantsRow(
+                "Training Dummy",
+                (byte)EntityType.Mob,
+                null);
+            DateTime start = new DateTime(2026, 8, 10, 20, 0, 0, DateTimeKind.Utc);
+            KPDatabaseDataSet.BattlesRow battle = data.Battles.AddBattlesRow(
+                enemy,
+                start,
+                start.AddMinutes(1),
+                true,
+                player,
+                (byte)EntityType.Player,
+                0,
+                0,
+                (byte)MobDifficulty.EvenMatch,
+                false);
+            KPDatabaseDataSet.ItemsRow item = data.Items.AddItemsRow("Sole Sushi");
+            for (int index = 0; index < 2; index++)
+            {
+                data.Interactions.AddInteractionsRow(
+                    start.AddSeconds(index * 20), player, player, battle,
+                    (byte)ActorType.Self, false, null, (byte)ActionType.Unknown,
+                    (byte)FailedActionType.None, (byte)DefenseType.None, 0,
+                    (byte)AidType.Item, (byte)RecoveryType.None, (byte)HarmType.None, 0,
+                    (byte)DamageModifier.None, (byte)AidType.None, (byte)RecoveryType.None,
+                    (byte)HarmType.None, 0, null, item);
+            }
+
+            object result = itemUsageBuilder.Invoke(null, new object[]
+            {
+                data.Interactions.Cast<KPDatabaseDataSet.InteractionsRow>(),
+                "all",
+                string.Empty,
+                1
+            });
+            object row = ((IEnumerable)result).Cast<object>().Single();
+            if ((string)row.GetType().GetProperty("Name").GetValue(row, null) != "ItemTester" ||
+                (string)row.GetType().GetProperty("Job").GetValue(row, null) != "Sole Sushi" ||
+                (long)row.GetType().GetProperty("Damage").GetValue(row, null) != 2L)
+            {
+                throw new InvalidOperationException("Synthetic consumable item-use aggregation failed.");
             }
         }
 
@@ -1111,6 +1432,230 @@ namespace BridgeReportSmoke
             SanctumDotProfileStore.Clear();
         }
 
+        private static void VerifyExtendedDotEstimatorRules()
+        {
+            SanctumDotProfileStore.Clear();
+            KPDatabaseDataSet data = new KPDatabaseDataSet();
+            KPDatabaseDataSet.CombatantsRow player = data.Combatants.AddCombatantsRow(
+                "DotTester",
+                (byte)EntityType.Player,
+                null);
+            KPDatabaseDataSet.CombatantsRow pet = data.Combatants.AddCombatantsRow(
+                "DotTester's Funguar",
+                (byte)EntityType.Pet,
+                null);
+            DateTime start = new DateTime(2026, 8, 8, 1, 0, 0, DateTimeKind.Utc);
+            List<KPDatabaseDataSet.BattlesRow> battles =
+                new List<KPDatabaseDataSet.BattlesRow>();
+            Dictionary<int, int> enemyIds = new Dictionary<int, int>();
+
+            SanctumDotProfileStore.Set(new SanctumPlayerStatProfile
+            {
+                PlayerName = "DotTester",
+                MainJobLevel = 75,
+                DaggerSkill = 180,
+                SwordSkill = 220,
+                ClubSkill = 225,
+                ArcherySkill = 180,
+                MarksmanshipSkill = 200,
+                DarkSkill = 220,
+                CapturedUtc = DateTime.UtcNow
+            });
+
+            KPDatabaseDataSet.BattlesRow hotShot = AddDotTestBattle(
+                data, player, "Hot Shot Target", start, 30, battles, enemyIds);
+            AddDamage(data, hotShot, player, hotShot.CombatantsRowByEnemyCombatantRelation,
+                "Hot Shot", start, 100, ActionType.Weaponskill);
+
+            KPDatabaseDataSet.BattlesRow flamingArrow = AddDotTestBattle(
+                data, player, "Flaming Arrow Target", start, 30, battles, enemyIds);
+            AddDamage(data, flamingArrow, player, flamingArrow.CombatantsRowByEnemyCombatantRelation,
+                "Flaming Arrow", start, 100, ActionType.Weaponskill);
+
+            KPDatabaseDataSet.BattlesRow burningBlade = AddDotTestBattle(
+                data, player, "Burning Blade Target", start, 45, battles, enemyIds);
+            AddDamage(data, burningBlade, player, burningBlade.CombatantsRowByEnemyCombatantRelation,
+                "Burning Blade", start, 100, ActionType.Weaponskill);
+
+            KPDatabaseDataSet.BattlesRow brainshaker = AddDotTestBattle(
+                data, player, "Brainshaker Target", start, 60, battles, enemyIds);
+            AddDamage(data, brainshaker, player, brainshaker.CombatantsRowByEnemyCombatantRelation,
+                "Brainshaker", start, 100, ActionType.Weaponskill);
+
+            KPDatabaseDataSet.BattlesRow viperBite = AddDotTestBattle(
+                data, player, "Viper Bite Target", start, 90, battles, enemyIds);
+            AddDamage(data, viperBite, player, viperBite.CombatantsRowByEnemyCombatantRelation,
+                "Viper Bite", start, 100, ActionType.Weaponskill);
+
+            KPDatabaseDataSet.BattlesRow waspSting = AddDotTestBattle(
+                data, player, "Wasp Sting Target", start, 90, battles, enemyIds);
+            AddDamage(data, waspSting, player, waspSting.CombatantsRowByEnemyCombatantRelation,
+                "Wasp Sting", start, 100, ActionType.Weaponskill);
+
+            KPDatabaseDataSet.BattlesRow bladeYu = AddDotTestBattle(
+                data, player, "Blade Yu Target", start, 90, battles, enemyIds);
+            AddDamage(data, bladeYu, player, bladeYu.CombatantsRowByEnemyCombatantRelation,
+                "Blade: Yu", start, 100, ActionType.Weaponskill);
+
+            KPDatabaseDataSet.BattlesRow kaustra = AddDotTestBattle(
+                data, player, "Kaustra Target", start, 120, battles, enemyIds);
+            AddDamage(data, kaustra, player, kaustra.CombatantsRowByEnemyCombatantRelation,
+                "Kaustra", start, 400, ActionType.Spell);
+
+            KPDatabaseDataSet.BattlesRow modus = AddDotTestBattle(
+                data, player, "Modus Target", start, 60, battles, enemyIds);
+            AddDamage(data, modus, player, modus.CombatantsRowByEnemyCombatantRelation,
+                "Geohelix", start, 100, ActionType.Spell);
+            AddDamage(data, modus, player, modus.CombatantsRowByEnemyCombatantRelation,
+                "Modus Veritas", start.AddSeconds(25), 300, ActionType.Ability);
+
+            KPDatabaseDataSet.BattlesRow queasyshroom = AddDotTestBattle(
+                data, player, "Queasyshroom Target", start, 70, battles, enemyIds);
+            AddDamage(data, queasyshroom, pet, queasyshroom.CombatantsRowByEnemyCombatantRelation,
+                "Queasyshroom", start, 100, ActionType.Ability);
+
+            KPDatabaseDataSet.BattlesRow leafDagger = AddDotTestBattle(
+                data, player, "Leaf Dagger Target", start, 90, battles, enemyIds);
+            AddDamage(data, leafDagger, pet, leafDagger.CombatantsRowByEnemyCombatantRelation,
+                "Leaf Dagger", start, 100, ActionType.Ability);
+
+            KPDatabaseDataSet.BattlesRow toxicSpit = AddDotTestBattle(
+                data, player, "Toxic Spit Target", start, 180, battles, enemyIds);
+            AddEnfeeble(data, toxicSpit, pet, toxicSpit.CombatantsRowByEnemyCombatantRelation,
+                "Toxic Spit", start, ActionType.Ability);
+
+            KPDatabaseDataSet.BattlesRow purulentOoze = AddDotTestBattle(
+                data, player, "Purulent Ooze Target", start, 120, battles, enemyIds);
+            AddDamage(data, purulentOoze, pet, purulentOoze.CombatantsRowByEnemyCombatantRelation,
+                "Purulent Ooze", start, 100, ActionType.Ability);
+
+            KPDatabaseDataSet.BattlesRow venom = AddDotTestBattle(
+                data, player, "Venom Target", start, 60, battles, enemyIds);
+            AddDamage(data, venom, pet, venom.CombatantsRowByEnemyCombatantRelation,
+                "Venom", start, 100, ActionType.Ability);
+
+            KPDatabaseDataSet.BattlesRow venomSpray = AddDotTestBattle(
+                data, player, "Venom Spray Target", start, 120, battles, enemyIds);
+            AddEnfeeble(data, venomSpray, pet, venomSpray.CombatantsRowByEnemyCombatantRelation,
+                "Venom Spray", start, ActionType.Ability);
+
+            KPDatabaseDataSet.BattlesRow zeroDamageBio = AddDotTestBattle(
+                data, player, "Zero Damage Bio Target", start, 30, battles, enemyIds);
+            AddDamage(data, zeroDamageBio, player, zeroDamageBio.CombatantsRowByEnemyCombatantRelation,
+                "Bio", start, 0, ActionType.Spell);
+
+            KPDatabaseDataSet.BattlesRow zeroDamageDia = AddDotTestBattle(
+                data, player, "Zero Damage Dia Target", start, 30, battles, enemyIds);
+            AddDamage(data, zeroDamageDia, player, zeroDamageDia.CombatantsRowByEnemyCombatantRelation,
+                "Dia", start, 0, ActionType.Spell);
+
+            KPDatabaseDataSet.BattlesRow resistedBio = AddDotTestBattle(
+                data, player, "Resisted Bio Target", start, 30, battles, enemyIds);
+            AddDamageOutcome(data, resistedBio, player, resistedBio.CombatantsRowByEnemyCombatantRelation,
+                "Bio II", start, FailedActionType.None, DefenseType.Resist);
+
+            KPDatabaseDataSet.BattlesRow absorbedDia = AddDotTestBattle(
+                data, player, "Absorbed Dia Target", start, 30, battles, enemyIds);
+            AddDamageOutcome(data, absorbedDia, player, absorbedDia.CombatantsRowByEnemyCombatantRelation,
+                "Dia II", start, FailedActionType.None, DefenseType.Absorb);
+
+            KPDatabaseDataSet.BattlesRow interruptedBio = AddDotTestBattle(
+                data, player, "Interrupted Bio Target", start, 30, battles, enemyIds);
+            AddDamageOutcome(data, interruptedBio, player, interruptedBio.CombatantsRowByEnemyCombatantRelation,
+                "Bio III", start, FailedActionType.Interrupted, DefenseType.None);
+
+            KPDatabaseDataSet.BattlesRow noEffectDia = AddDotTestBattle(
+                data, player, "No Effect Dia Target", start, 30, battles, enemyIds);
+            AddDamageOutcome(data, noEffectDia, player, noEffectDia.CombatantsRowByEnemyCombatantRelation,
+                "Dia III", start, FailedActionType.NoEffect, DefenseType.None);
+
+            Type estimator = typeof(DatabaseManager).Assembly.GetType(
+                "WaywardGamers.KParser.Bridge.SanctumDotEstimator",
+                true);
+            MethodInfo estimate = estimator.GetMethod(
+                "Estimate",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            IEnumerable results = (IEnumerable)estimate.Invoke(null, new object[]
+            {
+                battles,
+                data.Interactions,
+                enemyIds,
+                false
+            });
+
+            Dictionary<string, long> actual = new Dictionary<string, long>(
+                StringComparer.Ordinal);
+            foreach (object result in results)
+            {
+                string action = (string)result.GetType()
+                    .GetProperty("ActionName").GetValue(result, null);
+                actual[action] = (long)result.GetType()
+                    .GetProperty("Damage").GetValue(result, null);
+            }
+
+            Dictionary<string, long> expected = new Dictionary<string, long>(
+                StringComparer.Ordinal)
+            {
+                { "Hot Shot", 130 },
+                { "Flaming Arrow", 120 },
+                { "Burning Blade", 210 },
+                { "Brainshaker", 300 },
+                { "Viper Bite", 360 },
+                { "Wasp Sting", 30 },
+                { "Blade: Yu", 300 },
+                { "Kaustra", 2100 },
+                { "Geohelix", 200 },
+                { "Queasyshroom", 160 },
+                { "Leaf Dagger", 210 },
+                { "Toxic Spit", 1080 },
+                { "Purulent Ooze", 480 },
+                { "Venom", 40 },
+                { "Venom Spray", 600 },
+                { "Bio", 30 },
+                { "Dia", 10 }
+            };
+
+            if (actual.Count != expected.Count ||
+                expected.Any(item =>
+                    actual.ContainsKey(item.Key) == false ||
+                    actual[item.Key] != item.Value))
+            {
+                throw new InvalidOperationException(
+                    "Extended Sanctum DoT rules did not produce the expected totals.");
+            }
+
+            SanctumDotProfileStore.Clear();
+        }
+
+        private static KPDatabaseDataSet.BattlesRow AddDotTestBattle(
+            KPDatabaseDataSet data,
+            KPDatabaseDataSet.CombatantsRow player,
+            string enemyName,
+            DateTime start,
+            int durationSeconds,
+            IList<KPDatabaseDataSet.BattlesRow> battles,
+            IDictionary<int, int> enemyIds)
+        {
+            KPDatabaseDataSet.CombatantsRow enemy = data.Combatants.AddCombatantsRow(
+                enemyName,
+                (byte)EntityType.Mob,
+                null);
+            KPDatabaseDataSet.BattlesRow battle = data.Battles.AddBattlesRow(
+                enemy,
+                start,
+                start.AddSeconds(durationSeconds),
+                true,
+                player,
+                (byte)EntityType.Player,
+                0,
+                0,
+                (byte)MobDifficulty.EvenMatch,
+                false);
+            battles.Add(battle);
+            enemyIds[battle.BattleID] = enemy.CombatantID;
+            return battle;
+        }
+
         private static void VerifyPlayerStatLayout()
         {
             byte[] data = new byte[204];
@@ -1121,6 +1666,12 @@ namespace BridgeReportSmoke
             for (int offset = 16; offset <= 28; offset += 2)
                 WriteInt16(data, offset, 70);
             WriteInt16(data, 38, 81);
+            WriteUInt16(data, 108 + 2 * 2, 202);
+            WriteUInt16(data, 108 + 3 * 2, 203);
+            WriteUInt16(data, 108 + 9 * 2, 209);
+            WriteUInt16(data, 108 + 11 * 2, 211);
+            WriteUInt16(data, 108 + 25 * 2, 225);
+            WriteUInt16(data, 108 + 26 * 2, 226);
             WriteUInt16(data, 108 + 36 * 2, 410);
             WriteUInt16(data, 108 + 37 * 2, 420);
             WriteUInt16(data, 108 + 38 * 2, 430);
@@ -1139,6 +1690,9 @@ namespace BridgeReportSmoke
             if (!success || profile == null || profile.MainJob != 4 ||
                 profile.MainJobLevel != 99 || profile.SubJob != 5 ||
                 profile.SubJobLevel != 49 || profile.Intelligence != 151 ||
+                profile.DaggerSkill != 202 || profile.SwordSkill != 203 ||
+                profile.KatanaSkill != 209 || profile.ClubSkill != 211 ||
+                profile.ArcherySkill != 225 || profile.MarksmanshipSkill != 226 ||
                 profile.EnfeeblingSkill != 410 || profile.ElementalSkill != 420 ||
                 profile.DarkSkill != 430 || profile.NinjutsuSkill != 440 ||
                 profile.SingingSkill != 450)
@@ -1167,10 +1721,29 @@ namespace BridgeReportSmoke
             string actionName,
             DateTime timestamp)
         {
+            AddEnfeeble(
+                data,
+                battle,
+                actor,
+                target,
+                actionName,
+                timestamp,
+                ActionType.Spell);
+        }
+
+        private static void AddEnfeeble(
+            KPDatabaseDataSet data,
+            KPDatabaseDataSet.BattlesRow battle,
+            KPDatabaseDataSet.CombatantsRow actor,
+            KPDatabaseDataSet.CombatantsRow target,
+            string actionName,
+            DateTime timestamp,
+            ActionType actionType)
+        {
             KPDatabaseDataSet.ActionsRow action = data.Actions.AddActionsRow(actionName);
             data.Interactions.AddInteractionsRow(
                 timestamp, actor, target, battle, (byte)ActorType.Self, false, action,
-                (byte)ActionType.Spell, (byte)FailedActionType.None, (byte)DefenseType.None,
+                (byte)actionType, (byte)FailedActionType.None, (byte)DefenseType.None,
                 0, (byte)AidType.None, (byte)RecoveryType.None, (byte)HarmType.Enfeeble,
                 0, (byte)DamageModifier.None, (byte)AidType.None, (byte)RecoveryType.None,
                 (byte)HarmType.None, 0, null, null);
@@ -1185,12 +1758,52 @@ namespace BridgeReportSmoke
             DateTime timestamp,
             int damage)
         {
+            AddDamage(
+                data,
+                battle,
+                actor,
+                target,
+                actionName,
+                timestamp,
+                damage,
+                ActionType.Spell);
+        }
+
+        private static void AddDamage(
+            KPDatabaseDataSet data,
+            KPDatabaseDataSet.BattlesRow battle,
+            KPDatabaseDataSet.CombatantsRow actor,
+            KPDatabaseDataSet.CombatantsRow target,
+            string actionName,
+            DateTime timestamp,
+            int damage,
+            ActionType actionType)
+        {
             KPDatabaseDataSet.ActionsRow action = data.Actions.AddActionsRow(actionName);
             data.Interactions.AddInteractionsRow(
                 timestamp, actor, target, battle, (byte)ActorType.Self, false, action,
-                (byte)ActionType.Spell, (byte)FailedActionType.None, (byte)DefenseType.None,
+                (byte)actionType, (byte)FailedActionType.None, (byte)DefenseType.None,
                 0, (byte)AidType.None, (byte)RecoveryType.None, (byte)HarmType.Damage,
                 damage, (byte)DamageModifier.None, (byte)AidType.None, (byte)RecoveryType.None,
+                (byte)HarmType.None, 0, null, null);
+        }
+
+        private static void AddDamageOutcome(
+            KPDatabaseDataSet data,
+            KPDatabaseDataSet.BattlesRow battle,
+            KPDatabaseDataSet.CombatantsRow actor,
+            KPDatabaseDataSet.CombatantsRow target,
+            string actionName,
+            DateTime timestamp,
+            FailedActionType failedAction,
+            DefenseType defense)
+        {
+            KPDatabaseDataSet.ActionsRow action = data.Actions.AddActionsRow(actionName);
+            data.Interactions.AddInteractionsRow(
+                timestamp, actor, target, battle, (byte)ActorType.Self, false, action,
+                (byte)ActionType.Spell, (byte)failedAction, (byte)defense,
+                0, (byte)AidType.None, (byte)RecoveryType.None, (byte)HarmType.Damage,
+                0, (byte)DamageModifier.None, (byte)AidType.None, (byte)RecoveryType.None,
                 (byte)HarmType.None, 0, null, null);
         }
 

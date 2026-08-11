@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private readonly UiSettingsService settingsService = new();
     private readonly PlayerParseService playerParseService = new();
     private readonly PlayerInformationService playerInformationService = new();
+    private readonly ApplicationUpdateService applicationUpdateService = new();
     private readonly AppSettings settings;
     private readonly SemaphoreSlim refreshGate = new(1, 1);
     private readonly CancellationTokenSource lifetime = new();
@@ -29,12 +30,18 @@ public partial class MainWindow : Window
     private DateTime nextScheduledMainRefreshUtc = DateTime.MinValue;
     private CurrentFightViewModel? currentFightViewModel;
     private CurrentFightWindow? currentFightWindow;
+    private string currentFightWindowDisplayMode = "full";
     private PlayerComparisonWindow? playerComparisonWindow;
     private bool shutdownInProgress;
     private bool shutdownComplete;
     private bool closingCurrentFightForShutdown;
     private string? autoCapturedStatsPlayer;
     private DateTime nextAutomaticStatCaptureUtc = DateTime.MinValue;
+    private bool updateCheckInProgress;
+    private BridgeSnapshot? latestBridgeSnapshot;
+    private DateTimeOffset? lastBridgeSuccessUtc;
+    private string lastBridgeError = string.Empty;
+    private string memoryDetectionStatus = "Not checked during this dashboard session";
 
     public MainWindow()
     {
@@ -42,6 +49,10 @@ public partial class MainWindow : Window
         settings.ServerProfile = UiSettingsService.NormalizeServerProfile(settings.ServerProfile);
         bridgeClient.ServerProfile = settings.ServerProfile;
         bridgeClient.PetMappingPath = GetKParserBridgeMappingPath(settings.KParserBridgeAshitaRoot);
+        bridgeClient.DisplayPetDamageSeparately = settings.DisplayPetDamageSeparately;
+        bridgeClient.LocalPlayerName = string.IsNullOrWhiteSpace(settings.LocalCharacterName)
+            ? settings.DotStatCharacterName
+            : settings.LocalCharacterName;
         InitializeComponent();
         viewModel = new MainWindowViewModel();
         DataContext = viewModel;
@@ -53,6 +64,9 @@ public partial class MainWindow : Window
             settings.MainDisplayMode,
             settings.MainGroupMode);
         AutoDetectMemoryMenuItem.IsChecked = settings.AutoDetectMemoryOnStartup;
+        DisplayPetDamageSeparatelyMenuItem.IsChecked = settings.DisplayPetDamageSeparately;
+        AutomaticUpdateChecksMenuItem.IsChecked = settings.AutomaticallyCheckForUpdates;
+        PrereleaseUpdatesMenuItem.IsChecked = settings.IncludePrereleaseUpdates;
         LightModeMenuItem.IsChecked = settings.IsLightMode;
         UpdateServerProfileMenu();
         ThemeService.Apply(this, settings.IsLightMode);
@@ -94,9 +108,18 @@ public partial class MainWindow : Window
         {
             return;
         }
+        catch (Exception ex)
+        {
+            ApplicationDiagnostics.LogHandledException("Dashboard startup", ex);
+            viewModel.SetEngineLaunchFailed(
+                "The bundled engine could not be initialized: " + ex.Message);
+        }
 
         if (settings.CurrentFightOpen)
             OpenCurrentFightWindow();
+
+        if (settings.AutomaticallyCheckForUpdates)
+            _ = CheckForUpdatesAsync(false);
 
         await PollBridgeAsync(lifetime.Token);
     }
@@ -122,10 +145,19 @@ public partial class MainWindow : Window
         settingsService.TrySave(settings, out _);
         viewModel.SetShuttingDown();
 
-        await engineProcessManager.ShutdownAsync(bridgeClient);
-
-        shutdownComplete = true;
-        Close();
+        try
+        {
+            await engineProcessManager.ShutdownAsync(bridgeClient);
+        }
+        catch (Exception ex)
+        {
+            ApplicationDiagnostics.LogHandledException("Dashboard shutdown", ex);
+        }
+        finally
+        {
+            shutdownComplete = true;
+            Close();
+        }
     }
 
     private void MainWindow_Closed(object? sender, EventArgs e)
@@ -136,6 +168,7 @@ public partial class MainWindow : Window
         viewModel.EngineCommandRequested -= ViewModel_EngineCommandRequested;
         lifetime.Cancel();
         engineProcessManager.Dispose();
+        applicationUpdateService.Dispose();
         lifetime.Dispose();
     }
 
@@ -207,14 +240,28 @@ public partial class MainWindow : Window
                 lifetime.Token);
             viewModel.ApplyCommandResult(result);
             currentFightViewModel?.ApplyCommandResult(result);
+            if (command == "detect")
+            {
+                memoryDetectionStatus = result.Success
+                    ? string.IsNullOrWhiteSpace(result.MemoryOffset)
+                        ? result.Message
+                        : $"Validated at {result.MemoryOffset} · {result.Message}"
+                    : "Failed · " + result.Message;
+            }
             if (command == "capturestats")
             {
                 if (result.Success && !string.IsNullOrWhiteSpace(targetPlayer))
+                {
                     autoCapturedStatsPlayer = targetPlayer;
+                    settings.DotStatCharacterName = targetPlayer.Trim();
+                    settings.LocalCharacterName = settings.DotStatCharacterName;
+                    bridgeClient.LocalPlayerName = settings.DotStatCharacterName;
+                    settingsService.TrySave(settings, out _);
+                }
                 MessageBox.Show(
                     promptOwner ?? this,
                     result.Message,
-                    result.Success ? "DoT stats captured" : "DoT stat capture failed",
+                    result.Success ? "Player stats registered" : "Player stat registration failed",
                     MessageBoxButton.OK,
                     result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
             }
@@ -237,19 +284,41 @@ public partial class MainWindow : Window
 
     private async void CaptureDotStats_Click(object sender, RoutedEventArgs e)
     {
-        var selected = viewModel.SelectedCombatant;
-        if (selected is null ||
-            !string.Equals(selected.CombatantType, "Player", StringComparison.OrdinalIgnoreCase))
-        {
-            viewModel.SetUserNotice(
-                "Select your player row, then press Capture DoT Stats again.");
+        if (!viewModel.CanCaptureDotStats)
             return;
-        }
+
+        var selectedPlayer = viewModel.SelectedCombatant is { CombatantType: "Player" } selected
+            ? selected.Name
+            : string.Empty;
+        var suggestedPlayer = !string.IsNullOrWhiteSpace(selectedPlayer)
+            ? selectedPlayer
+            : settings.DotStatCharacterName;
+        var knownPlayers = playerInformationService.GetEntries()
+            .Select(entry => entry.Name)
+            .Append(selectedPlayer)
+            .Append(settings.DotStatCharacterName)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var captureWindow = new DotStatCaptureWindow(knownPlayers, suggestedPlayer)
+        {
+            Owner = this
+        };
+        ThemeService.Apply(captureWindow, settings.IsLightMode);
+        if (captureWindow.ShowDialog() != true)
+            return;
+
+        settings.DotStatCharacterName = captureWindow.CharacterName;
+        settings.LocalCharacterName = captureWindow.CharacterName;
+        bridgeClient.LocalPlayerName = settings.DotStatCharacterName;
+        settingsService.TrySave(settings, out _);
 
         await ExecuteEngineCommandAsync(
             "capturestats",
             this,
-            selected.Name);
+            captureWindow.CharacterName);
     }
 
     private async Task PollBridgeAsync(CancellationToken cancellationToken)
@@ -301,7 +370,9 @@ public partial class MainWindow : Window
                         "sources",
                         "player",
                         cancellationToken);
+                    RecordBridgeSuccess(currentFightSnapshot);
                     playerInformationService.ObserveAndApply(currentFightSnapshot);
+                    RememberLocalPlayer(currentFightSnapshot);
                     currentFightViewModel.ApplySnapshot(currentFightSnapshot);
                     await TryCaptureLocalPlayerStatsAsync(currentFightSnapshot, cancellationToken);
                 }
@@ -309,8 +380,9 @@ public partial class MainWindow : Window
                 {
                     throw;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    RecordBridgeFailure(ex);
                     currentFightViewModel.SetDisconnected();
                 }
             }
@@ -328,7 +400,9 @@ public partial class MainWindow : Window
                     viewModel.ReportSearchText,
                     false,
                     cancellationToken);
+                RecordBridgeSuccess(snapshot);
                 playerInformationService.ObserveAndApply(snapshot);
+                RememberLocalPlayer(snapshot);
                 viewModel.ApplySnapshot(snapshot);
                 await TryCaptureLocalPlayerStatsAsync(snapshot, cancellationToken);
             }
@@ -336,8 +410,9 @@ public partial class MainWindow : Window
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            RecordBridgeFailure(ex);
             viewModel.SetDisconnected();
             currentFightViewModel?.SetDisconnected();
         }
@@ -377,6 +452,10 @@ public partial class MainWindow : Window
             if (result.Success)
             {
                 autoCapturedStatsPlayer = localPlayer.Name;
+                settings.DotStatCharacterName = localPlayer.Name;
+                settings.LocalCharacterName = localPlayer.Name;
+                bridgeClient.LocalPlayerName = localPlayer.Name;
+                settingsService.TrySave(settings, out _);
                 viewModel.SetUserNotice(
                     $"Detected {localPlayer.Name}'s job and DoT calculation stats automatically.");
                 currentFightViewModel?.SetUserNotice(
@@ -389,8 +468,24 @@ public partial class MainWindow : Window
         }
         catch
         {
-            // Manual Capture DoT Stats remains available with a detailed error.
+            // Manual player-stat registration remains available with a detailed error.
         }
+    }
+
+    private void RememberLocalPlayer(BridgeSnapshot snapshot)
+    {
+        var localPlayer = snapshot.Combatants.FirstOrDefault(row =>
+            row.IsLocalPlayer &&
+            string.Equals(row.CombatantType, "Player", StringComparison.OrdinalIgnoreCase));
+        if (localPlayer is null || string.IsNullOrWhiteSpace(localPlayer.Name) ||
+            string.Equals(settings.LocalCharacterName, localPlayer.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        settings.LocalCharacterName = localPlayer.Name.Trim();
+        bridgeClient.LocalPlayerName = settings.LocalCharacterName;
+        settingsService.TrySave(settings, out _);
     }
 
     private void UpdateReportColumnHeaders()
@@ -425,6 +520,11 @@ public partial class MainWindow : Window
                                      viewModel.SelectedDisplayModeKey == "performance")
             ? Visibility.Visible
             : Visibility.Collapsed;
+        CriticalRateColumn.Visibility = ShowsCriticalRateColumn(
+            viewModel.SelectedReport,
+            viewModel.SelectedDisplayModeKey)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         if (viewModel.IsChatSelected)
         {
@@ -440,6 +540,25 @@ public partial class MainWindow : Window
             PrimaryColumn.Width = new DataGridLength(1.05, DataGridLengthUnitType.Star);
             Detail1Column.Width = new DataGridLength(1.05, DataGridLengthUnitType.Star);
         }
+    }
+
+    private static bool ShowsCriticalRateColumn(string report, string displayMode)
+    {
+        if (report == "damageDealt")
+        {
+            return displayMode == "sources" || displayMode == "melee" ||
+                   displayMode == "ranged" || displayMode == "weaponskills" ||
+                   displayMode == "accuracy" || displayMode == "multiattacks";
+        }
+
+        if (report == "damageTaken")
+        {
+            return displayMode == "sources" || displayMode == "melee" ||
+                   displayMode == "ranged" || displayMode == "defense" ||
+                   displayMode == "buffperformance";
+        }
+
+        return report == "fights" && displayMode == "performance";
     }
 
     private static Visibility ColumnVisibility(string label) =>
@@ -469,6 +588,12 @@ public partial class MainWindow : Window
 
     private async void OpenCurrentFight_Click(object sender, RoutedEventArgs e)
     {
+        if (currentFightWindow is not null)
+        {
+            currentFightWindow.Close();
+            return;
+        }
+
         OpenCurrentFightWindow();
         await RefreshSnapshotAsync(lifetime.Token);
     }
@@ -491,20 +616,19 @@ public partial class MainWindow : Window
             settings.CurrentFightCombatantScope,
             settings.CurrentFightView,
             settings.CurrentFightAlwaysOnTop,
-            settings.CurrentFightCompactMode,
+            settings.CurrentFightDisplayMode,
             settings.CurrentFightBackgroundTransparencyPercent);
         currentFightViewModel.ScopeChanged += CurrentFightViewModel_ScopeChanged;
-        currentFightViewModel.CompactModeChanged += CurrentFightViewModel_CompactModeChanged;
+        currentFightViewModel.DisplayModeChanged += CurrentFightViewModel_DisplayModeChanged;
         currentFightViewModel.EngineCommandRequested += CurrentFightViewModel_EngineCommandRequested;
 
         currentFightWindow = new CurrentFightWindow(currentFightViewModel);
         ThemeService.Apply(currentFightWindow, settings.IsLightMode);
         currentFightWindow.SaveBuildRequested += CurrentFightWindow_SaveBuildRequested;
         currentFightWindow.Closed += CurrentFightWindow_Closed;
-        ConfigureMonitorWindow(currentFightWindow, currentFightViewModel.IsCompactMode);
-        var placement = currentFightViewModel.IsCompactMode
-            ? settings.CompactCurrentFightWindow
-            : settings.CurrentFightWindow;
+        currentFightWindowDisplayMode = currentFightViewModel.SelectedDisplayModeKey;
+        ConfigureMonitorWindow(currentFightWindow, currentFightWindowDisplayMode);
+        var placement = GetMonitorWindowPlacement(currentFightWindowDisplayMode);
         if (!ApplyWindowPlacement(currentFightWindow, placement))
             currentFightWindow.WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
@@ -528,7 +652,7 @@ public partial class MainWindow : Window
     private void CurrentFightWindow_Closed(object? sender, EventArgs e)
     {
         if (sender is CurrentFightWindow window && currentFightViewModel is not null)
-            CaptureMonitorWindowPlacement(window, currentFightViewModel.IsCompactMode);
+            CaptureMonitorWindowPlacement(window, currentFightViewModel.SelectedDisplayModeKey);
 
         if (currentFightViewModel is not null)
         {
@@ -536,9 +660,10 @@ public partial class MainWindow : Window
             settings.CurrentFightView = currentFightViewModel.SelectedFightViewKey;
             settings.CurrentFightAlwaysOnTop = currentFightViewModel.IsAlwaysOnTop;
             settings.CurrentFightCompactMode = currentFightViewModel.IsCompactMode;
+            settings.CurrentFightDisplayMode = currentFightViewModel.SelectedDisplayModeKey;
             settings.CurrentFightBackgroundTransparencyPercent = currentFightViewModel.BackgroundTransparencyPercent;
             currentFightViewModel.ScopeChanged -= CurrentFightViewModel_ScopeChanged;
-            currentFightViewModel.CompactModeChanged -= CurrentFightViewModel_CompactModeChanged;
+            currentFightViewModel.DisplayModeChanged -= CurrentFightViewModel_DisplayModeChanged;
             currentFightViewModel.EngineCommandRequested -= CurrentFightViewModel_EngineCommandRequested;
         }
 
@@ -553,10 +678,11 @@ public partial class MainWindow : Window
 
         currentFightWindow = null;
         currentFightViewModel = null;
+        currentFightWindowDisplayMode = "full";
         settingsService.TrySave(settings, out _);
     }
 
-    private void CurrentFightViewModel_CompactModeChanged(object? sender, EventArgs e)
+    private void CurrentFightViewModel_DisplayModeChanged(object? sender, EventArgs e)
     {
         if (currentFightWindow is null || currentFightViewModel is null)
             return;
@@ -569,13 +695,12 @@ public partial class MainWindow : Window
                 currentFightWindow.Height)
             : currentFightWindow.RestoreBounds;
 
-        CaptureMonitorWindowPlacement(currentFightWindow, !currentFightViewModel.IsCompactMode);
+        CaptureMonitorWindowPlacement(currentFightWindow, currentFightWindowDisplayMode);
         currentFightWindow.WindowState = WindowState.Normal;
-        ConfigureMonitorWindow(currentFightWindow, currentFightViewModel.IsCompactMode);
+        currentFightWindowDisplayMode = currentFightViewModel.SelectedDisplayModeKey;
+        ConfigureMonitorWindow(currentFightWindow, currentFightWindowDisplayMode);
 
-        var placement = currentFightViewModel.IsCompactMode
-            ? settings.CompactCurrentFightWindow
-            : settings.CurrentFightWindow;
+        var placement = GetMonitorWindowPlacement(currentFightWindowDisplayMode);
         if (!ApplyWindowPlacement(currentFightWindow, placement))
         {
             currentFightWindow.WindowStartupLocation = WindowStartupLocation.Manual;
@@ -585,6 +710,7 @@ public partial class MainWindow : Window
         }
 
         settings.CurrentFightCompactMode = currentFightViewModel.IsCompactMode;
+        settings.CurrentFightDisplayMode = currentFightWindowDisplayMode;
         settingsService.TrySave(settings, out _);
     }
 
@@ -597,12 +723,221 @@ public partial class MainWindow : Window
             : "Automatic memory detection is turned off.");
     }
 
+    private async void DisplayPetDamageSeparately_Click(object sender, RoutedEventArgs e)
+    {
+        settings.DisplayPetDamageSeparately = DisplayPetDamageSeparatelyMenuItem.IsChecked;
+        bridgeClient.DisplayPetDamageSeparately = settings.DisplayPetDamageSeparately;
+        settingsService.TrySave(settings, out _);
+        viewModel.SetUserNotice(settings.DisplayPetDamageSeparately
+            ? "Pet damage will be shown on a separate row with its master identified."
+            : "Pet damage will be included in its master's totals.");
+        await RefreshSnapshotAsync(lifetime.Token);
+    }
+
+    private void AutomaticUpdateChecks_Click(object sender, RoutedEventArgs e)
+    {
+        settings.AutomaticallyCheckForUpdates = AutomaticUpdateChecksMenuItem.IsChecked;
+        settingsService.TrySave(settings, out _);
+        viewModel.SetUserNotice(settings.AutomaticallyCheckForUpdates
+            ? "KParser will check GitHub for updates when it starts."
+            : "Automatic update checks are turned off. Manual checks remain available under Help.");
+    }
+
+    private void PrereleaseUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        settings.IncludePrereleaseUpdates = PrereleaseUpdatesMenuItem.IsChecked;
+        settings.SkippedUpdateVersion = string.Empty;
+        settingsService.TrySave(settings, out _);
+        viewModel.SetUserNotice(settings.IncludePrereleaseUpdates
+            ? "Preview releases will be included in update checks."
+            : "Only stable KParser releases will be offered.");
+    }
+
+    private async void CheckForUpdates_Click(object sender, RoutedEventArgs e) =>
+        await CheckForUpdatesAsync(true);
+
+    private void Diagnostics_Click(object sender, RoutedEventArgs e)
+    {
+        var diagnosticsWindow = new DiagnosticsWindow(CreateDiagnosticReportAsync)
+        {
+            Owner = this
+        };
+        ThemeService.Apply(diagnosticsWindow, settings.IsLightMode);
+        diagnosticsWindow.ShowDialog();
+    }
+
+    private async Task<ApplicationDiagnosticReport> CreateDiagnosticReportAsync()
+    {
+        var snapshot = latestBridgeSnapshot;
+        if (!shutdownInProgress && refreshGate.Wait(0))
+        {
+            try
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+                timeout.CancelAfter(TimeSpan.FromSeconds(2));
+                snapshot = await bridgeClient.GetSnapshotAsync(timeout.Token);
+                RecordBridgeSuccess(snapshot);
+            }
+            catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+            {
+            }
+            catch (Exception ex)
+            {
+                RecordBridgeFailure(ex);
+            }
+            finally
+            {
+                refreshGate.Release();
+            }
+        }
+
+        return DiagnosticReportService.Create(new ApplicationDiagnosticContext
+        {
+            ServerProfile = settings.ServerProfile,
+            BridgeStatus = snapshot is null
+                ? "Not connected"
+                : "Connected",
+            EngineVersion = snapshot?.EngineVersion ?? viewModel.CurrentEngineVersion,
+            EnginePath = engineProcessManager.EnginePath ?? string.Empty,
+            OwnsEngineProcess = engineProcessManager.OwnsEngineProcess,
+            ParserRunning = snapshot?.ParserRunning ?? viewModel.ParserRunning,
+            DatabaseOpen = snapshot?.DatabaseOpen ?? false,
+            ParseMode = snapshot?.ParseMode ?? string.Empty,
+            MemoryStatus = memoryDetectionStatus,
+            PetOwnershipMode = snapshot?.PetOwnershipMode ?? "Observed only",
+            UnresolvedPetStatus = GetUnresolvedPetStatus(snapshot),
+            DisplayPetDamageSeparately = settings.DisplayPetDamageSeparately,
+            RegisteredPlayer = settings.DotStatCharacterName,
+            AutomaticMemoryDetection = settings.AutoDetectMemoryOnStartup,
+            IncludePrereleaseUpdates = settings.IncludePrereleaseUpdates,
+            LightMode = settings.IsLightMode,
+            LastBridgeSuccessUtc = lastBridgeSuccessUtc,
+            LastBridgeError = lastBridgeError
+        });
+    }
+
+    private void RecordBridgeSuccess(BridgeSnapshot snapshot)
+    {
+        latestBridgeSnapshot = snapshot;
+        lastBridgeSuccessUtc = DateTimeOffset.UtcNow;
+        lastBridgeError = string.Empty;
+    }
+
+    private void RecordBridgeFailure(Exception exception)
+    {
+        lastBridgeError = exception.Message;
+    }
+
+    private static string GetUnresolvedPetStatus(BridgeSnapshot? snapshot)
+    {
+        if (snapshot is null)
+            return "No current report data";
+
+        var petRows = snapshot.Combatants
+            .Where(row => string.Equals(row.CombatantType, "Pet", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (petRows.Length == 0)
+            return "No pet rows visible in the current report";
+
+        var unresolved = petRows.Count(row =>
+            row.Job.Contains("unresolved", StringComparison.OrdinalIgnoreCase) ||
+            row.Name.Contains("owner token", StringComparison.OrdinalIgnoreCase));
+        return unresolved == 0
+            ? $"No unresolved markers ({petRows.Length} visible pet row{(petRows.Length == 1 ? string.Empty : "s")})"
+            : $"{unresolved} unresolved pet row{(unresolved == 1 ? string.Empty : "s")} in the current report";
+    }
+
+    private async Task CheckForUpdatesAsync(bool userInitiated)
+    {
+        if (updateCheckInProgress || shutdownInProgress)
+            return;
+
+        updateCheckInProgress = true;
+        if (userInitiated)
+            viewModel.SetUserNotice("Checking GitHub for KParser updates…");
+
+        try
+        {
+            var update = await applicationUpdateService.CheckForUpdatesAsync(
+                settings.IncludePrereleaseUpdates,
+                lifetime.Token);
+            if (update.AvailableReleases.Count == 0)
+            {
+                if (userInitiated)
+                {
+                    MessageBox.Show(
+                        this,
+                        $"You already have the newest available version ({update.CurrentVersion}).",
+                        "KParser is up to date",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    viewModel.SetUserNotice("KParser is up to date.");
+                }
+
+                return;
+            }
+
+            if (!userInitiated && string.Equals(
+                    settings.SkippedUpdateVersion,
+                    update.LatestRelease.Tag,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var updateWindow = new ApplicationUpdateWindow(
+                update,
+                applicationUpdateService)
+            {
+                Owner = this
+            };
+            ThemeService.Apply(updateWindow, settings.IsLightMode);
+            updateWindow.ShowDialog();
+
+            switch (updateWindow.Outcome)
+            {
+                case ApplicationUpdateWindowOutcome.SkipVersion:
+                    settings.SkippedUpdateVersion = update.LatestRelease.Tag;
+                    settingsService.TrySave(settings, out _);
+                    viewModel.SetUserNotice(
+                        $"{update.LatestRelease.Tag} will be skipped. A newer release will still be offered.");
+                    break;
+
+                case ApplicationUpdateWindowOutcome.UpdateLaunched:
+                    settings.SkippedUpdateVersion = string.Empty;
+                    settingsService.TrySave(settings, out _);
+                    Close();
+                    break;
+            }
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            if (userInitiated)
+            {
+                MessageBox.Show(
+                    this,
+                    "KParser could not check for updates. " + ex.Message,
+                    "Update check unavailable",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                viewModel.SetUserNotice("The update check could not reach GitHub.");
+            }
+        }
+        finally
+        {
+            updateCheckInProgress = false;
+        }
+    }
+
     private async void PlayerInformation_Click(object sender, RoutedEventArgs e)
     {
         try
         {
             var players = await bridgeClient.GetSnapshotAsync(
-                "all", 0, null, "damageDealt", "players", "sources", "player", lifetime.Token);
+                "all", 0, null, "damageDealt", "all", "sources", "player", lifetime.Token);
             playerInformationService.ObserveAndApply(players);
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
@@ -665,11 +1000,14 @@ public partial class MainWindow : Window
         settings.MainDisplayMode = viewModel.SelectedDisplayModeKey;
         settings.MainGroupMode = viewModel.SelectedGroupModeKey;
         settings.AutoDetectMemoryOnStartup = AutoDetectMemoryMenuItem.IsChecked;
+        settings.DisplayPetDamageSeparately = DisplayPetDamageSeparatelyMenuItem.IsChecked;
+        settings.AutomaticallyCheckForUpdates = AutomaticUpdateChecksMenuItem.IsChecked;
+        settings.IncludePrereleaseUpdates = PrereleaseUpdatesMenuItem.IsChecked;
         settings.IsLightMode = LightModeMenuItem.IsChecked;
         settings.CurrentFightOpen = currentFightWindow is { IsVisible: true };
 
         if (currentFightWindow is not null && currentFightViewModel is not null)
-            CaptureMonitorWindowPlacement(currentFightWindow, currentFightViewModel.IsCompactMode);
+            CaptureMonitorWindowPlacement(currentFightWindow, currentFightViewModel.SelectedDisplayModeKey);
 
         if (currentFightViewModel is not null)
         {
@@ -677,24 +1015,35 @@ public partial class MainWindow : Window
             settings.CurrentFightView = currentFightViewModel.SelectedFightViewKey;
             settings.CurrentFightAlwaysOnTop = currentFightViewModel.IsAlwaysOnTop;
             settings.CurrentFightCompactMode = currentFightViewModel.IsCompactMode;
+            settings.CurrentFightDisplayMode = currentFightViewModel.SelectedDisplayModeKey;
             settings.CurrentFightBackgroundTransparencyPercent = currentFightViewModel.BackgroundTransparencyPercent;
         }
     }
 
-    private void CaptureMonitorWindowPlacement(CurrentFightWindow window, bool compactMode)
+    private void CaptureMonitorWindowPlacement(CurrentFightWindow window, string displayMode)
     {
-        CaptureWindowPlacement(
-            window,
-            compactMode ? settings.CompactCurrentFightWindow : settings.CurrentFightWindow);
+        CaptureWindowPlacement(window, GetMonitorWindowPlacement(displayMode));
     }
 
-    private static void ConfigureMonitorWindow(CurrentFightWindow window, bool compactMode)
+    private WindowPlacementSettings GetMonitorWindowPlacement(string displayMode) =>
+        displayMode switch
+        {
+            "compact" => settings.CompactCurrentFightWindow,
+            "overlay" => settings.TrueOverlayCurrentFightWindow,
+            _ => settings.CurrentFightWindow
+        };
+
+    private static void ConfigureMonitorWindow(CurrentFightWindow window, string displayMode)
     {
-        window.MinWidth = compactMode ? 360 : 720;
-        window.MinHeight = compactMode ? 205 : 360;
-        window.Title = compactMode
-            ? "KParser - Live Monitor (Compact)"
-            : "KParser - Live Monitor";
+        var overlay = displayMode == "overlay";
+        var compact = displayMode == "compact";
+        window.MinWidth = overlay ? 340 : compact ? 360 : 720;
+        window.MinHeight = overlay ? 100 : compact ? 205 : 360;
+        window.Title = overlay
+            ? "KParser - True Overlay"
+            : compact
+                ? "KParser - Live Monitor (Compact)"
+                : "KParser - Live Monitor";
     }
 
     private static void KeepWindowVisible(Window window)

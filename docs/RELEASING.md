@@ -15,10 +15,10 @@ Do not publish a setup or portable executable until every item below is complete
 
 ## Versioning
 
-Preview 24 currently uses:
+Preview 26 currently uses:
 
-    Product version: 0.24.0
-    Display version: Preview 24
+    Product version: 0.26.0
+    Display version: Preview 26
 
 For stable public releases, prefer semantic tags such as v1.0.0. Every binary asset must identify the same version.
 
@@ -41,6 +41,7 @@ A GitHub release should include:
 - Compact portable 7z archive, when offered
 - Standalone versioned KParserBridge ZIP
 - SHA-256 checksum file
+- `update-manifest.json` generated from the same final assets
 - Release notes and known limitations
 - Direct link to the matching source tag
 - GPL license and third-party notices within each distribution
@@ -66,12 +67,17 @@ At minimum, verify:
 - Dark and light themes
 - CSV export and party-summary fallback
 - Data cleanup on a fresh application launch
+- Startup and manual update checks using a controlled test release
+- Separate patch-note pages when the installed copy is more than one release behind
+- Verified checksum rejection and successful update/restart for both Setup and Portable editions
 
 Record the exact Windows, XiLoader, and client build used for verification.
 
 ## Checksums
 
 Generate SHA-256 hashes after the final binaries are built and do not modify the assets afterward. Publish the hashes as a plain text release asset and repeat them in the release notes.
+
+Upload both `SHA256SUMS.txt` and `update-manifest.json` with every release. The automatic updater will not install a package unless GitHub supplies a SHA-256 asset digest or the matching filename appears in the published checksum file.
 
 ## Rollback
 

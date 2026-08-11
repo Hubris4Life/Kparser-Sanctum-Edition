@@ -54,6 +54,7 @@ internal sealed class CombatantRow : INotifyPropertyChanged
     public string MagicDisplay => TextOrDefault(Detail3Text, FormatAmount(Magic));
     public string OtherDisplay => TextOrDefault(Detail4Text, FormatAmount(Other));
     public string AccuracyDisplay => FormatLabeledDetail(Accuracy, "Accuracy:");
+    public string CriticalRateDisplay => FormatCriticalRate(CriticalRate);
     public string SourceBreakdownDisplay => string.Join(
         "  ·  ",
         "Melee " + FormatAmount(MeleeDamage),
@@ -151,6 +152,29 @@ internal sealed class CombatantRow : INotifyPropertyChanged
 
     private static string TextOrDefault(string text, string fallback) =>
         string.IsNullOrWhiteSpace(text) ? fallback : text;
+
+    private static string FormatCriticalRate(string detail)
+    {
+        if (string.IsNullOrWhiteSpace(detail))
+            return "\u2014";
+
+        var value = detail.Trim();
+        foreach (var label in new[]
+                 {
+                     "Critical hit rate:",
+                     "Critical rate:",
+                     "Incoming critical rate:"
+                 })
+        {
+            if (!value.StartsWith(label, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            value = value[label.Length..].Trim();
+            break;
+        }
+
+        return value.EndsWith("%", StringComparison.Ordinal) ? value : "\u2014";
+    }
 
     private static string FormatLabeledDetail(string detail, string label)
     {

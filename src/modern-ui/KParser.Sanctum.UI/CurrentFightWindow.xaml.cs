@@ -106,7 +106,7 @@ public partial class CurrentFightWindow : Window
 
     private void WindowDragArea_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ClickCount == 2 && !viewModel.IsCompactMode)
+        if (e.ClickCount == 2 && viewModel.IsFullMode)
         {
             WindowState = WindowState == WindowState.Maximized
                 ? WindowState.Normal

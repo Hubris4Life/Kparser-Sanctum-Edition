@@ -15,7 +15,7 @@
         TextOptions.TextRenderingMode="ClearType"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
-        Topmost="{Binding IsAlwaysOnTop}">
+        Topmost="{Binding ShouldStayOnTop}">
     <Window.Resources>
         <Color x:Key="ChromeColor">#1B1E23</Color>
         <Color x:Key="PanelColor">#22262C</Color>
@@ -267,10 +267,10 @@
         <Grid x:Name="FullLayout">
             <Grid.Style>
                 <Style TargetType="Grid">
-                    <Setter Property="Visibility" Value="Visible" />
+                    <Setter Property="Visibility" Value="Collapsed" />
                     <Style.Triggers>
-                        <DataTrigger Binding="{Binding IsCompactMode}" Value="True">
-                            <Setter Property="Visibility" Value="Collapsed" />
+                        <DataTrigger Binding="{Binding IsFullMode}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
                         </DataTrigger>
                     </Style.Triggers>
                 </Style>
@@ -314,6 +314,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel>
                     <StackPanel Orientation="Horizontal">
@@ -330,7 +331,13 @@
                               VerticalAlignment="Top" />
                 <Button Grid.Column="2"
                         Content="COMPACT MODE"
-                        Command="{Binding ToggleCompactModeCommand}"
+                        Command="{Binding ShowCompactModeCommand}"
+                        Style="{StaticResource TinyButtonStyle}"
+                        Margin="0,0,6,0"
+                        VerticalAlignment="Top" />
+                <Button Grid.Column="3"
+                        Content="TRUE OVERLAY"
+                        Command="{Binding ShowTrueOverlayModeCommand}"
                         Style="{StaticResource TinyButtonStyle}"
                         VerticalAlignment="Top" />
             </Grid>
@@ -388,7 +395,7 @@
                 <RadioButton Grid.Column="1" Content="Current Fight" GroupName="FullFightView" IsChecked="{Binding IsCurrentFightView, Mode=TwoWay}" Style="{StaticResource ScopeToggleStyle}" />
                 <RadioButton Grid.Column="3" Content="Alliance" GroupName="FullCombatantScope" IsChecked="{Binding IsAllianceScope, Mode=TwoWay}" Style="{StaticResource ScopeToggleStyle}" Margin="0,0,5,0" />
                 <RadioButton Grid.Column="4" Content="Party" GroupName="FullCombatantScope" IsChecked="{Binding IsPartyScope, Mode=TwoWay}" Style="{StaticResource ScopeToggleStyle}" Margin="0,0,5,0" />
-                <RadioButton Grid.Column="5" Content="Players" GroupName="FullCombatantScope" IsChecked="{Binding IsPlayersScope, Mode=TwoWay}" Style="{StaticResource ScopeToggleStyle}" />
+                <RadioButton Grid.Column="5" Content="Self" GroupName="FullCombatantScope" IsChecked="{Binding IsSelfScope, Mode=TwoWay}" Style="{StaticResource ScopeToggleStyle}" />
                 <TextBlock Grid.Column="6" Text="{Binding ViewLabel}" Foreground="{StaticResource MutedTextBrush}" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
             </Grid>
 
@@ -419,6 +426,7 @@
                     <DataGridTextColumn Header="Share" Binding="{Binding ShareDisplay}" Width="0.72*" />
                     <DataGridTextColumn Header="DPS" Binding="{Binding DpsDisplay}" Width="0.82*" />
                     <DataGridTextColumn Header="Acc." Binding="{Binding AccuracyDisplay}" Width="0.72*" />
+                    <DataGridTextColumn Header="Crit.%" Binding="{Binding CriticalRateDisplay}" Width="0.72*" />
                 </DataGrid.Columns>
             </DataGrid>
 
@@ -437,7 +445,7 @@
                 <Button Content="Start" Command="{Binding StartParserCommand}" IsEnabled="{Binding IsStartEnabled}" Style="{StaticResource AccentButtonStyle}" Margin="0,0,6,0" />
                 <Button Grid.Column="1" Content="Stop" Command="{Binding StopParserCommand}" IsEnabled="{Binding IsStopEnabled}" Style="{StaticResource CompactButtonStyle}" Margin="0,0,6,0" />
                 <Button Grid.Column="2" Content="Reset" Command="{Binding ResetParserCommand}" IsEnabled="{Binding IsResetEnabled}" Style="{StaticResource CompactButtonStyle}" />
-                <Button Grid.Column="4" Content="Save Build" Click="SaveBuild_Click" IsEnabled="{Binding CanSaveBuild}" Style="{StaticResource CompactButtonStyle}" Margin="0,0,6,0" />
+                <Button Grid.Column="4" Content="Save Parse" Click="SaveBuild_Click" IsEnabled="{Binding CanSaveBuild}" Style="{StaticResource CompactButtonStyle}" Margin="0,0,6,0" />
                 <Button Grid.Column="5" Content="Send to Party" Click="SendParty_Click" IsEnabled="{Binding CanSendPartySummary}" Style="{StaticResource CompactButtonStyle}" Margin="0,0,6,0" />
                 <Button Grid.Column="6" Content="Export" Click="Export_Click" Style="{StaticResource CompactButtonStyle}" Margin="0,0,6,0" />
                 <Button Grid.Column="7" Content="Copy Summary" Click="CopySummary_Click" Style="{StaticResource CompactButtonStyle}" Margin="0,0,6,0" />
@@ -478,6 +486,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Border Grid.Column="0" Background="#01000000" MouseLeftButtonDown="WindowDragArea_MouseLeftButtonDown">
                     <StackPanel>
@@ -498,7 +507,8 @@
                             ToolTip="{Binding BackgroundTransparencyPercent, StringFormat=Background transparency: {0:0}%}" />
                 </StackPanel>
                 <ToggleButton Grid.Column="2" Content="PIN" IsChecked="{Binding IsAlwaysOnTop, Mode=TwoWay}" Style="{StaticResource TinyPinToggleStyle}" Margin="0,0,5,0" VerticalAlignment="Center" />
-                <Button Grid.Column="3" Content="EXPAND" Command="{Binding ToggleCompactModeCommand}" Style="{StaticResource TinyButtonStyle}" VerticalAlignment="Center" />
+                <Button Grid.Column="3" Content="EXPAND" Command="{Binding ShowFullModeCommand}" Style="{StaticResource TinyButtonStyle}" Margin="0,0,5,0" VerticalAlignment="Center" />
+                <Button Grid.Column="4" Content="OVERLAY" Command="{Binding ShowTrueOverlayModeCommand}" Style="{StaticResource TinyButtonStyle}" VerticalAlignment="Center" />
             </Grid>
 
             <Grid Grid.Row="1" Margin="6,2">
@@ -514,7 +524,7 @@
                 <RadioButton Grid.Column="1" Content="Current" GroupName="CompactFightView" IsChecked="{Binding IsCurrentFightView, Mode=TwoWay}" Style="{StaticResource TinyToggleStyle}" />
                 <RadioButton Grid.Column="3" Content="Alliance" GroupName="CompactCombatantScope" IsChecked="{Binding IsAllianceScope, Mode=TwoWay}" Style="{StaticResource TinyToggleStyle}" Margin="0,0,4,0" />
                 <RadioButton Grid.Column="4" Content="Party" GroupName="CompactCombatantScope" IsChecked="{Binding IsPartyScope, Mode=TwoWay}" Style="{StaticResource TinyToggleStyle}" Margin="0,0,4,0" />
-                <RadioButton Grid.Column="5" Content="Players" GroupName="CompactCombatantScope" IsChecked="{Binding IsPlayersScope, Mode=TwoWay}" Style="{StaticResource TinyToggleStyle}" />
+                <RadioButton Grid.Column="5" Content="Self" GroupName="CompactCombatantScope" IsChecked="{Binding IsSelfScope, Mode=TwoWay}" Style="{StaticResource TinyToggleStyle}" />
             </Grid>
 
             <DataGrid Grid.Row="2"
@@ -548,6 +558,7 @@
                     <DataGridTextColumn Header="Share" Binding="{Binding ShareDisplay}" Width="0.7*" />
                     <DataGridTextColumn Header="DPS" Binding="{Binding DpsDisplay}" Width="0.78*" />
                     <DataGridTextColumn Header="Acc.%" Binding="{Binding AccuracyDisplay}" Width="0.7*" />
+                    <DataGridTextColumn Header="Crit.%" Binding="{Binding CriticalRateDisplay}" Width="0.7*" />
                 </DataGrid.Columns>
             </DataGrid>
 
@@ -577,6 +588,93 @@
                            Margin="10,0,0,0"
                            TextTrimming="CharacterEllipsis" />
             </Grid>
+        </Grid>
+
+        <Grid x:Name="TrueOverlayLayout">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsTrueOverlayMode}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="24" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Background="#01000000" MouseLeftButtonDown="WindowDragArea_MouseLeftButtonDown">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" Margin="7,0" VerticalAlignment="Center">
+                    <Ellipse Width="7" Height="7" Fill="{Binding ParserStatusBrush}" Margin="0,0,6,0" />
+                    <TextBlock Text="{Binding ViewLabel}" Foreground="{StaticResource MutedTextBrush}" FontSize="9" FontWeight="SemiBold" />
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Content="FULL"
+                        Command="{Binding ShowFullModeCommand}"
+                        Style="{StaticResource TinyButtonStyle}"
+                        Padding="5,0"
+                        FontSize="9"
+                        Margin="0,2,4,2" />
+                <Button Grid.Column="2"
+                        Content="×"
+                        Click="Close_Click"
+                        Style="{StaticResource TinyButtonStyle}"
+                        Padding="6,0"
+                        FontSize="11"
+                        Margin="0,2,4,2" />
+            </Grid>
+
+            <DataGrid Grid.Row="1"
+                      Margin="4,0,4,4"
+                      ItemsSource="{Binding Combatants}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      CanUserResizeRows="False"
+                      CanUserSortColumns="True"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="None"
+                      BorderBrush="{StaticResource BorderBrush}"
+                      BorderThickness="1"
+                      Background="{StaticResource PanelBrush}"
+                      Foreground="{StaticResource TextBrush}"
+                      SelectionMode="Single"
+                      SelectionUnit="FullRow"
+                      EnableRowVirtualization="True">
+                <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                        <Setter Property="MinHeight" Value="24" />
+                    </Style>
+                </DataGrid.RowStyle>
+                <DataGrid.ColumnHeaderStyle>
+                    <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                        <Setter Property="Padding" Value="5,3" />
+                        <Setter Property="FontSize" Value="9" />
+                    </Style>
+                </DataGrid.ColumnHeaderStyle>
+                <DataGrid.CellStyle>
+                    <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                        <Setter Property="Padding" Value="5,2" />
+                        <Setter Property="FontSize" Value="10" />
+                    </Style>
+                </DataGrid.CellStyle>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Player" Binding="{Binding Name}" Width="1.45*" />
+                    <DataGridTextColumn Header="Damage" Binding="{Binding DamageDisplay}" Width="0.95*" />
+                    <DataGridTextColumn Header="Share" Binding="{Binding ShareDisplay}" Width="0.68*" />
+                    <DataGridTextColumn Header="Acc.%" Binding="{Binding AccuracyDisplay}" Width="0.68*" />
+                    <DataGridTextColumn Header="Crit.%" Binding="{Binding CriticalRateDisplay}" Width="0.68*" />
+                </DataGrid.Columns>
+            </DataGrid>
         </Grid>
         <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" IsHitTestVisible="False" />
     </Grid>

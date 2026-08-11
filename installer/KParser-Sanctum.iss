@@ -1,5 +1,13 @@
 #define MyAppName "KParser - Sanctum Edition"
-#define MyAppVersion "Preview 24"
+#ifndef MyAppVersion
+#define MyAppVersion "Preview 26"
+#endif
+#ifndef MyAppNumericVersion
+#define MyAppNumericVersion "0.26.0.0"
+#endif
+#ifndef MyOutputBaseFilename
+#define MyOutputBaseFilename "KParser-Sanctum-Setup-Preview-26"
+#endif
 #define MyAppExeName "KParser-Sanctum-Modern.exe"
 
 [Setup]
@@ -19,7 +27,7 @@ PrivilegesRequired=lowest
 SetupArchitecture=x64
 MinVersion=10.0.17763
 OutputDir=output
-OutputBaseFilename=KParser-Sanctum-Setup-Preview-24
+OutputBaseFilename={#MyOutputBaseFilename}
 SetupIconFile=..\src\legacy-engine\FFXILogParser\Gobby.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/ultra64
@@ -28,7 +36,7 @@ WizardStyle=modern
 CloseApplications=yes
 RestartApplications=no
 SetupLogging=yes
-VersionInfoVersion=0.24.0.0
+VersionInfoVersion={#MyAppNumericVersion}
 VersionInfoProductName={#MyAppName}
 VersionInfoDescription=Installs KParser - Sanctum Edition and its complete parser engine
 VersionInfoCompany=Sanctum Edition contributors
@@ -50,3 +58,4 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDi
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Flags: nowait skipifnotsilent

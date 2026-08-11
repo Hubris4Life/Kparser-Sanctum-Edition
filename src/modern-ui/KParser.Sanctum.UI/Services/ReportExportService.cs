@@ -81,7 +81,8 @@ internal static class ReportExportService
                 row.DamageDisplay + " damage",
                 row.ShareDisplay,
                 row.DpsDisplay + " DPS",
-                row.AccuracyDisplay + " accuracy"));
+                row.AccuracyDisplay + " accuracy",
+                row.CriticalRateDisplay + " critical rate"));
         }
 
         return builder.ToString().TrimEnd();
@@ -95,7 +96,7 @@ internal static class ReportExportService
         AppendCsvRow(builder, "Total damage", viewModel.TotalDamage);
         AppendCsvRow(builder, "Alliance DPS", viewModel.AllianceDps);
         builder.AppendLine();
-        AppendCsvRow(builder, "Rank", "Combatant", "Job", "Damage", "Share", "DPS", "Accuracy");
+        AppendCsvRow(builder, "Rank", "Combatant", "Job", "Damage", "Share", "DPS", "Accuracy", "Critical rate");
         foreach (var row in viewModel.Combatants)
         {
             AppendCsvRow(
@@ -106,7 +107,8 @@ internal static class ReportExportService
                 row.Damage.ToString(CultureInfo.InvariantCulture),
                 row.Share.ToString(CultureInfo.InvariantCulture),
                 row.Dps.ToString(CultureInfo.InvariantCulture),
-                CleanText(row.AccuracyDisplay));
+                CleanText(row.AccuracyDisplay),
+                CleanText(row.CriticalRateDisplay));
         }
 
         return builder.ToString();

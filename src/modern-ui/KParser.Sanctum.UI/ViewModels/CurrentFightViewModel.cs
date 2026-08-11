@@ -27,7 +27,7 @@ internal sealed class CurrentFightViewModel : ObservableObject
     private bool parserRunning;
     private bool engineCommandBusy;
     private bool isAlwaysOnTop;
-    private bool isCompactMode;
+    private string monitorDisplayMode = "full";
     private double backgroundTransparencyPercent;
     private CombatantRow? selectedCombatant;
 
@@ -35,30 +35,34 @@ internal sealed class CurrentFightViewModel : ObservableObject
         string combatantScope,
         string fightView,
         bool alwaysOnTop,
-        bool compactMode,
+        string displayMode,
         double backgroundTransparency)
     {
         selectedCombatantScope = NormalizeScope(combatantScope);
         selectedFightView = NormalizeFightView(fightView);
         isAlwaysOnTop = alwaysOnTop;
-        isCompactMode = compactMode;
+        monitorDisplayMode = NormalizeDisplayMode(displayMode);
         backgroundTransparencyPercent = Math.Clamp(backgroundTransparency, 0, 100);
         Combatants = [];
         StartParserCommand = new DelegateCommand(() => RequestEngineCommand("start"));
         StopParserCommand = new DelegateCommand(() => RequestEngineCommand("stop"));
         ResetParserCommand = new DelegateCommand(() => RequestEngineCommand("reset"));
-        ToggleCompactModeCommand = new DelegateCommand(ToggleCompactMode);
+        ShowFullModeCommand = new DelegateCommand(() => SelectDisplayMode("full"));
+        ShowCompactModeCommand = new DelegateCommand(() => SelectDisplayMode("compact"));
+        ShowTrueOverlayModeCommand = new DelegateCommand(() => SelectDisplayMode("overlay"));
     }
 
     public event EventHandler? ScopeChanged;
-    public event EventHandler? CompactModeChanged;
+    public event EventHandler? DisplayModeChanged;
     public event EventHandler<EngineCommandRequestedEventArgs>? EngineCommandRequested;
 
     public ObservableCollection<CombatantRow> Combatants { get; }
     public ICommand StartParserCommand { get; }
     public ICommand StopParserCommand { get; }
     public ICommand ResetParserCommand { get; }
-    public ICommand ToggleCompactModeCommand { get; }
+    public ICommand ShowFullModeCommand { get; }
+    public ICommand ShowCompactModeCommand { get; }
+    public ICommand ShowTrueOverlayModeCommand { get; }
 
     public CombatantRow? SelectedCombatant
     {
@@ -93,14 +97,17 @@ internal sealed class CurrentFightViewModel : ObservableObject
     public bool IsAlwaysOnTop
     {
         get => isAlwaysOnTop;
-        set => SetProperty(ref isAlwaysOnTop, value);
+        set
+        {
+            if (SetProperty(ref isAlwaysOnTop, value))
+                RaisePropertyChanged(nameof(ShouldStayOnTop));
+        }
     }
 
-    public bool IsCompactMode
-    {
-        get => isCompactMode;
-        private set => SetProperty(ref isCompactMode, value);
-    }
+    public bool IsFullMode => monitorDisplayMode == "full";
+    public bool IsCompactMode => monitorDisplayMode == "compact";
+    public bool IsTrueOverlayMode => monitorDisplayMode == "overlay";
+    public bool ShouldStayOnTop => IsTrueOverlayMode || IsAlwaysOnTop;
 
     public double BackgroundTransparencyPercent
     {
@@ -115,6 +122,7 @@ internal sealed class CurrentFightViewModel : ObservableObject
 
     public string SelectedCombatantScopeKey => selectedCombatantScope;
     public string SelectedFightViewKey => selectedFightView;
+    public string SelectedDisplayModeKey => monitorDisplayMode;
 
     public bool IsAllFightsView
     {
@@ -140,10 +148,10 @@ internal sealed class CurrentFightViewModel : ObservableObject
         set { if (value) SelectScope("party"); }
     }
 
-    public bool IsPlayersScope
+    public bool IsSelfScope
     {
-        get => selectedCombatantScope == "players";
-        set { if (value) SelectScope("players"); }
+        get => selectedCombatantScope == "self";
+        set { if (value) SelectScope("self"); }
     }
 
     public bool IsStartEnabled => engineConnected && !parserRunning && !engineCommandBusy;
@@ -227,6 +235,10 @@ internal sealed class CurrentFightViewModel : ObservableObject
                 WeaponSkills = combatant.WeaponSkills,
                 Magic = combatant.Magic,
                 Other = combatant.Other,
+                PhysicalAttempts = combatant.PhysicalAttempts,
+                PhysicalHits = combatant.PhysicalHits,
+                PhysicalMisses = combatant.PhysicalMisses,
+                CriticalHits = combatant.CriticalHits,
                 TopAction = combatant.TopAction,
                 Accuracy = combatant.Accuracy,
                 CriticalRate = combatant.CriticalRate,
@@ -342,7 +354,7 @@ internal sealed class CurrentFightViewModel : ObservableObject
         selectedCombatantScope = scope;
         RaisePropertyChanged(nameof(IsAllianceScope));
         RaisePropertyChanged(nameof(IsPartyScope));
-        RaisePropertyChanged(nameof(IsPlayersScope));
+        RaisePropertyChanged(nameof(IsSelfScope));
         ScopeChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -359,10 +371,19 @@ internal sealed class CurrentFightViewModel : ObservableObject
         ScopeChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private void ToggleCompactMode()
+    private void SelectDisplayMode(string displayMode)
     {
-        IsCompactMode = !IsCompactMode;
-        CompactModeChanged?.Invoke(this, EventArgs.Empty);
+        displayMode = NormalizeDisplayMode(displayMode);
+        if (monitorDisplayMode == displayMode)
+            return;
+
+        monitorDisplayMode = displayMode;
+        RaisePropertyChanged(nameof(IsFullMode));
+        RaisePropertyChanged(nameof(IsCompactMode));
+        RaisePropertyChanged(nameof(IsTrueOverlayMode));
+        RaisePropertyChanged(nameof(ShouldStayOnTop));
+        RaisePropertyChanged(nameof(SelectedDisplayModeKey));
+        DisplayModeChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void SetParserState(bool isRunning)
@@ -388,12 +409,20 @@ internal sealed class CurrentFightViewModel : ObservableObject
     private static string NormalizeScope(string scope) => scope switch
     {
         "party" => "party",
-        "players" => "players",
+        "players" => "self",
+        "self" => "self",
         _ => "all"
     };
 
     private static string NormalizeFightView(string fightView) =>
         fightView == "current" ? "current" : "all";
+
+    private static string NormalizeDisplayMode(string displayMode) => displayMode switch
+    {
+        "compact" => "compact",
+        "overlay" => "overlay",
+        _ => "full"
+    };
 
     private static DateTime ParseUtc(string value)
     {

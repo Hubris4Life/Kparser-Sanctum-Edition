@@ -25,7 +25,8 @@ internal sealed class UiSettingsService
                 var freshSettings = new AppSettings
                 {
                     CompactMonitorHeightOptimized = true,
-                    ServerProfile = "other"
+                    ServerProfile = "other",
+                    CurrentFightDisplayMode = "full"
                 };
                 return freshSettings;
             }
@@ -36,6 +37,7 @@ internal sealed class UiSettingsService
             settings.MainWindow ??= new WindowPlacementSettings { Width = 1450, Height = 900 };
             settings.CurrentFightWindow ??= new WindowPlacementSettings { Width = 620, Height = 560 };
             settings.CompactCurrentFightWindow ??= new WindowPlacementSettings { Width = 430, Height = 285 };
+            settings.TrueOverlayCurrentFightWindow ??= new WindowPlacementSettings { Width = 500, Height = 240 };
             if (!settings.CompactMonitorHeightOptimized)
             {
                 settings.CompactCurrentFightWindow.Height = Math.Min(
@@ -50,8 +52,14 @@ internal sealed class UiSettingsService
             settings.MainGroupMode ??= "player";
             settings.CurrentFightCombatantScope ??= "all";
             settings.CurrentFightView ??= "all";
+            settings.CurrentFightDisplayMode = NormalizeMonitorDisplayMode(
+                string.IsNullOrWhiteSpace(settings.CurrentFightDisplayMode)
+                    ? settings.CurrentFightCompactMode ? "compact" : "full"
+                    : settings.CurrentFightDisplayMode);
+            settings.CurrentFightCompactMode = settings.CurrentFightDisplayMode == "compact";
             settings.ServerProfile = NormalizeServerProfile(settings.ServerProfile);
             settings.KParserBridgeAshitaRoot ??= string.Empty;
+            settings.SkippedUpdateVersion ??= string.Empty;
             settings.CurrentFightBackgroundTransparencyPercent = Math.Clamp(
                 settings.CurrentFightBackgroundTransparencyPercent,
                 0,
@@ -60,7 +68,11 @@ internal sealed class UiSettingsService
         }
         catch (Exception)
         {
-            return new AppSettings { ServerProfile = "other" };
+            return new AppSettings
+            {
+                ServerProfile = "other",
+                CurrentFightDisplayMode = "full"
+            };
         }
     }
 
@@ -90,4 +102,12 @@ internal sealed class UiSettingsService
         string.Equals(profile?.Trim(), "sanctumxi", StringComparison.OrdinalIgnoreCase)
             ? "sanctum"
             : "other";
+
+    internal static string NormalizeMonitorDisplayMode(string? displayMode) =>
+        displayMode?.Trim().ToLowerInvariant() switch
+        {
+            "compact" => "compact",
+            "overlay" => "overlay",
+            _ => "full"
+        };
 }

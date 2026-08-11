@@ -19,6 +19,8 @@ internal sealed class ParserBridgeClient
 
     public string ServerProfile { get; set; } = "sanctum";
     public string PetMappingPath { get; set; } = string.Empty;
+    public bool DisplayPetDamageSeparately { get; set; }
+    public string LocalPlayerName { get; set; } = string.Empty;
 
     public async Task<BridgeSnapshot> GetSnapshotAsync(CancellationToken cancellationToken)
     {
@@ -70,6 +72,10 @@ internal sealed class ParserBridgeClient
         bool excludeCommonDrops,
         CancellationToken cancellationToken)
     {
+        var effectiveCombatantScope = GetEffectiveCombatantScope(
+            combatantScope,
+            report,
+            DisplayPetDamageSeparately);
         var request = JsonSerializer.Serialize(
             new BridgeRequest(
                 1,
@@ -80,18 +86,34 @@ internal sealed class ParserBridgeClient
                 battleId,
                 mobName,
                 report,
-                combatantScope,
+                effectiveCombatantScope,
                 displayMode,
                 groupMode,
                 searchText,
                 excludeCommonDrops,
                 ServerProfile,
-                PetMappingPath),
+                PetMappingPath,
+                LocalPlayerName),
             JsonOptions);
         return await SendRequestAsync<BridgeSnapshot>(
             request,
             TimeSpan.FromSeconds(3),
             cancellationToken);
+    }
+
+    internal static string GetEffectiveCombatantScope(
+        string? combatantScope,
+        string report,
+        bool displayPetDamageSeparately)
+    {
+        const string petRowsSuffix = ":petrows";
+        var scope = string.IsNullOrWhiteSpace(combatantScope) ? "all" : combatantScope;
+        if (scope.EndsWith(petRowsSuffix, StringComparison.OrdinalIgnoreCase))
+            scope = scope[..^petRowsSuffix.Length];
+        return displayPetDamageSeparately &&
+               string.Equals(report, "damageDealt", StringComparison.OrdinalIgnoreCase)
+            ? scope + petRowsSuffix
+            : scope;
     }
 
     public async Task<BridgeCommandResult> SendCommandAsync(
@@ -122,7 +144,8 @@ internal sealed class ParserBridgeClient
                 null,
                 false,
                 ServerProfile,
-                PetMappingPath),
+                PetMappingPath,
+                LocalPlayerName),
             JsonOptions);
         var timeout = string.Equals(command, "detect", StringComparison.OrdinalIgnoreCase)
             ? TimeSpan.FromSeconds(45)
@@ -211,5 +234,6 @@ internal sealed class ParserBridgeClient
         string? SearchText,
         bool ExcludeCommonDrops,
         string ServerProfile,
-        string PetMappingPath);
+        string PetMappingPath,
+        string LocalPlayerName);
 }

@@ -21,6 +21,7 @@ namespace WaywardGamers.KParser.Bridge
         public bool ExcludeCommonDrops { get; set; }
         public string ServerProfile { get; set; }
         public string PetMappingPath { get; set; }
+        public string LocalPlayerName { get; set; }
     }
 
     public sealed class SanctumEngineCommand
@@ -185,6 +186,7 @@ namespace WaywardGamers.KParser.Bridge
         public long PhysicalHits { get; set; }
         public long PhysicalMisses { get; set; }
         public long CriticalHits { get; set; }
+        public long ExtraAttackRounds { get; set; }
         public string PrimaryText { get; set; }
         public string ShareText { get; set; }
         public string RateText { get; set; }

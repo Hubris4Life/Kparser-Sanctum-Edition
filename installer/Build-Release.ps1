@@ -5,11 +5,35 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$artifactRoot = Join-Path $repoRoot 'artifacts\v0.24.0-preview'
+$modernProject = Join-Path $repoRoot 'src\modern-ui\KParser.Sanctum.UI\KParser.Sanctum.UI.csproj'
+
+[xml]$modernProjectXml = Get-Content -LiteralPath $modernProject -Raw
+$applicationVersion = [string](@($modernProjectXml.Project.PropertyGroup.Version) |
+    Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+    Select-Object -First 1)
+$displayVersion = [string](@($modernProjectXml.Project.PropertyGroup.InformationalVersion) |
+    Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+    Select-Object -First 1)
+if ([string]::IsNullOrWhiteSpace($applicationVersion) -or [string]::IsNullOrWhiteSpace($displayVersion))
+{
+    throw 'The modern application version metadata could not be read.'
+}
+$releaseTag = if ($displayVersion -match '(?i)preview')
+{
+    'v{0}-preview' -f $applicationVersion
+}
+else
+{
+    'v{0}' -f $applicationVersion
+}
+$assetVersionLabel = ($displayVersion -replace '[^A-Za-z0-9]+', '-').Trim('-')
+$setupBaseName = 'KParser-Sanctum-Setup-{0}' -f $assetVersionLabel
+$portableBaseName = 'KParser-Sanctum-Portable-{0}' -f $assetVersionLabel
+$numericFileVersion = '{0}.0' -f $applicationVersion
+$artifactRoot = Join-Path $repoRoot ('artifacts\{0}' -f $releaseTag)
 $payloadRoot = Join-Path $PSScriptRoot 'payload\current'
 $engineRoot = Join-Path $payloadRoot 'Engine'
 $installerOutput = Join-Path $PSScriptRoot 'output'
-$modernProject = Join-Path $repoRoot 'src\modern-ui\KParser.Sanctum.UI\KParser.Sanctum.UI.csproj'
 $legacySolution = Join-Path $repoRoot 'src\legacy-engine\FFXILogParser.sln'
 $legacyOutput = Join-Path $repoRoot 'src\legacy-engine\FFXILogParser\bin\x86\Release'
 $engineArchive = Join-Path $repoRoot 'src\modern-ui\KParser.Sanctum.UI\Assets\EnginePayload.zip'
@@ -49,6 +73,15 @@ function Copy-DirectoryContents([string] $source, [string] $destination)
 
     New-Item -ItemType Directory -Path $destination -Force | Out-Null
     Get-ChildItem -LiteralPath $source -Force | Copy-Item -Destination $destination -Recurse -Force
+}
+
+function Assert-ReleaseDocumentVersion([string] $path, [string] $expectedText)
+{
+    $contents = Get-Content -LiteralPath $path -Raw
+    if ($contents.IndexOf($expectedText, [System.StringComparison]::OrdinalIgnoreCase) -lt 0)
+    {
+        throw "Release document $path does not mention the expected version '$expectedText'."
+    }
 }
 
 function Find-MSBuild
@@ -156,6 +189,10 @@ if (-not (Test-Path -LiteralPath $sqlCePrivateX86))
     throw 'The SQL Server Compact 4.0 SP1 x86 private runtime was not found.'
 }
 
+Assert-ReleaseDocumentVersion (Join-Path $PSScriptRoot 'RELEASE-NOTES.md') $displayVersion
+Assert-ReleaseDocumentVersion (Join-Path $PSScriptRoot 'README-FIRST.txt') $displayVersion
+Assert-ReleaseDocumentVersion (Join-Path $PSScriptRoot 'SOURCE-CODE.txt') $releaseTag
+
 Write-Host 'Restoring modern Windows runtime dependencies...'
 & dotnet restore $modernProject --runtime win-x64
 if ($LASTEXITCODE -ne 0)
@@ -199,14 +236,20 @@ Stage-ReleaseDocuments $payloadRoot
 Stage-OptionalAddons $payloadRoot
 
 Write-Host 'Compiling setup executable...'
-& $innoCompiler (Join-Path $PSScriptRoot 'KParser-Sanctum.iss')
+$innoArguments = @(
+    ('/DMyAppVersion="{0}"' -f $displayVersion),
+    ('/DMyAppNumericVersion="{0}"' -f $numericFileVersion),
+    ('/DMyOutputBaseFilename="{0}"' -f $setupBaseName),
+    (Join-Path $PSScriptRoot 'KParser-Sanctum.iss')
+)
+& $innoCompiler @innoArguments
 if ($LASTEXITCODE -ne 0)
 {
     throw "Inno Setup failed with exit code $LASTEXITCODE."
 }
 
-$setupSource = Join-Path $installerOutput 'KParser-Sanctum-Setup-Preview-24.exe'
-$setupAsset = Join-Path $artifactRoot 'KParser-Sanctum-Setup-Preview-24.exe'
+$setupSource = Join-Path $installerOutput ($setupBaseName + '.exe')
+$setupAsset = Join-Path $artifactRoot ($setupBaseName + '.exe')
 Copy-Item -LiteralPath $setupSource -Destination $setupAsset -Force
 
 $portablePublish = Join-Path $artifactRoot 'portable-publish'
@@ -242,8 +285,8 @@ Copy-Item -LiteralPath (Join-Path $portablePublish 'KParser-Sanctum-Modern.exe')
 Stage-ReleaseDocuments $portablePackage
 Stage-OptionalAddons $portablePackage
 
-$portableAsset = Join-Path $artifactRoot 'KParser-Sanctum-Portable-Preview-24.zip'
-$portableCompactAsset = Join-Path $artifactRoot 'KParser-Sanctum-Portable-Preview-24.7z'
+$portableAsset = Join-Path $artifactRoot ($portableBaseName + '.zip')
+$portableCompactAsset = Join-Path $artifactRoot ($portableBaseName + '.7z')
 Push-Location $portablePackage
 try
 {
@@ -283,15 +326,42 @@ finally
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'RELEASE-NOTES.md') -Destination $artifactRoot -Force
 
 $checksumAsset = Join-Path $artifactRoot 'SHA256SUMS.txt'
-$checksumLines = @($setupAsset, $portableAsset, $portableCompactAsset, $kParserBridgeAsset) | ForEach-Object {
+$checksumEntries = @($setupAsset, $portableAsset, $portableCompactAsset, $kParserBridgeAsset) | ForEach-Object {
     $file = Get-Item -LiteralPath $_
     $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName
-    '{0}  {1}' -f $hash.Hash.ToLowerInvariant(), $file.Name
+    [pscustomobject]@{
+        Name = $file.Name
+        Size = $file.Length
+        Sha256 = $hash.Hash.ToLowerInvariant()
+    }
 }
+$checksumLines = $checksumEntries | ForEach-Object { '{0}  {1}' -f $_.Sha256, $_.Name }
 $checksumLines | Set-Content -LiteralPath $checksumAsset -Encoding ascii
+
+$updateManifestAsset = Join-Path $artifactRoot 'update-manifest.json'
+$updateManifest = [ordered]@{
+    SchemaVersion = 1
+    Version = $releaseTag
+    DisplayVersion = $displayVersion
+    ReleaseNotesAsset = 'RELEASE-NOTES.md'
+    ChecksumAsset = 'SHA256SUMS.txt'
+    Assets = @($checksumEntries | ForEach-Object {
+        [ordered]@{
+            Name = $_.Name
+            Size = $_.Size
+            Sha256 = $_.Sha256
+        }
+    })
+}
+$utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText(
+    $updateManifestAsset,
+    ($updateManifest | ConvertTo-Json -Depth 4),
+    $utf8WithoutBom)
 
 Write-Host "SETUP=$setupAsset"
 Write-Host "PORTABLE=$portableAsset"
 Write-Host "PORTABLE_COMPACT=$portableCompactAsset"
 Write-Host "KPARSERBRIDGE=$kParserBridgeAsset"
 Write-Host "CHECKSUMS=$checksumAsset"
+Write-Host "UPDATE_MANIFEST=$updateManifestAsset"
