@@ -1,6 +1,6 @@
 # KParser - Sanctum Edition
 
-KParser - Sanctum Edition is a Windows combat parser for Final Fantasy XI private-server environments. It combines a modern WPF dashboard with a modified KParser engine that reads local client chat data, maintains parse history, and exposes reports to the interface through a restricted local bridge.
+KParser - Sanctum Edition is a Windows combat parser for Final Fantasy XI private-server environment based on the future Sanctum XI server. It combines a modern UI with a modified KParser engine that reads local client chat data, maintains parse history, and exposes reports to the interface through a restricted local bridge.
 
 This project is a modified derivative of KParser, originally created by David Smith. It is not an unrelated reimplementation and is distributed under the GNU General Public License, version 2 or, at your option, any later version.
 
@@ -54,8 +54,6 @@ The modern interface and legacy engine use different toolchains. The interface t
 
 See [Building from source](docs/BUILDING.md) for prerequisites and verified project paths.
 
-Repository owners should also read [Publishing this folder on GitHub](docs/GITHUB-SETUP.md) before the first push.
-
 ## Repository layout
 
     src/modern-ui/       Modern .NET 10 WPF interface
@@ -74,13 +72,13 @@ KParser reads chat and selected player-state information from a locally running 
 
 ## Compatibility
 
-Sanctum XI is the fully tested profile. Other mode uses conservative observed-log behavior and shared client detection, but individual private servers may still require combat-message adapters.
+Sanctum Edition is designed and fully tested for Sanctum XI's supported XiLoader/FFXI client environment. Other mode uses conservative observed-log behavior and shared client detection, but individual private servers may still require combat-message adapters and are not guaranteed to be fully compatible.
 
 Run KParser at the same Windows privilege level as XiLoader/FFXI. If one process is elevated and the other is not, memory detection and chat access may fail.
 
 ## History and attribution
 
-Sanctum Edition is based on the HorizonXI-hotfix lineage from [poroburu/kparser](https://github.com/poroburu/kparser), itself a fork of [Kinematics/kparser](https://github.com/Kinematics/kparser) and an export of the original Google Code KParser project. The recorded starting tag is HorizonXI-Hotfix at commit a3dc8d095b3d3bc888fcea0b4e0a881ed5a08751.
+Sanctum Edition is based on the HorizonXI-hotfix lineage from [poroburu/kparser](https://github.com/poroburu/kparser), which was a fork of [Kinematics/kparser](https://github.com/Kinematics/kparser) and an export of the original Google Code KParser project. The recorded starting tag is HorizonXI-Hotfix at commit a3dc8d095b3d3bc888fcea0b4e0a881ed5a08751.
 
 Original KParser copyright (C) 2007-2009 David Smith. Sanctum Edition modifications copyright (C) 2026 Sanctum Edition contributors.
 
@@ -94,4 +92,4 @@ Every binary release must be accompanied by, or provide equivalent access to, th
 
 ## Disclaimer
 
-This community project is not affiliated with, endorsed by, or sponsored by Square Enix, the original KParser author, Kinematics, EdenXI, HorizonXI, or the maintainers of any other private server. FINAL FANTASY and related names are trademarks or registered trademarks of their respective owners. No game client, server software, copyrighted game data, or Square Enix assets are distributed by this repository.
+This community project is not affiliated with, endorsed by, or sponsored by SquareEnix, the original KParser author, Kinematics or the maintainers of any other private server. FINAL FANTASY and related names are trademarks or registered trademarks of their respective owners. No game client, server software, copyrighted game data, or SquareEnix assets are distributed by this repository.
