@@ -33,9 +33,14 @@ namespace WaywardGamers.KParser.Bridge
             get { return string.Equals(CurrentProfile, "sanctum", StringComparison.Ordinal); }
         }
 
+        internal static bool IsHorizon
+        {
+            get { return string.Equals(CurrentProfile, "horizon", StringComparison.Ordinal); }
+        }
+
         internal static bool SupportsCalculatedDots
         {
-            get { return IsSanctumXi; }
+            get { return IsSanctumXi || IsHorizon; }
         }
 
         internal static string LocalPlayerName
@@ -53,12 +58,22 @@ namespace WaywardGamers.KParser.Bridge
             string mappingPath = requestedPetMappingPath == null
                 ? string.Empty
                 : requestedPetMappingPath.Trim();
+            bool profileChanged;
 
             lock (StateLock)
             {
+                profileChanged = string.Equals(
+                    currentProfile,
+                    profile,
+                    StringComparison.Ordinal) == false;
                 currentProfile = profile;
                 petMappingPath = mappingPath;
             }
+
+            // Captured stats belong to a character on one server profile. Do not
+            // let a same-named character inherit them after a profile switch.
+            if (profileChanged)
+                SanctumDotProfileStore.Clear();
         }
 
         internal static void ConfigureLocalPlayer(string requestedPlayerName)
@@ -79,11 +94,23 @@ namespace WaywardGamers.KParser.Bridge
                 return "sanctum";
 
             string profile = requestedProfile.Trim().ToLowerInvariant();
-            return profile == "sanctum" ||
-                   profile == "sanctumxi" ||
-                   profile == "sanctum-xi"
-                ? "sanctum"
-                : "other";
+            if (profile == "sanctum" ||
+                profile == "sanctumxi" ||
+                profile == "sanctum-xi" ||
+                profile == "sanctum xi")
+            {
+                return "sanctum";
+            }
+
+            if (profile == "horizon" ||
+                profile == "horizonxi" ||
+                profile == "horizon-xi" ||
+                profile == "horizon xi")
+            {
+                return "horizon";
+            }
+
+            return "other";
         }
     }
 }

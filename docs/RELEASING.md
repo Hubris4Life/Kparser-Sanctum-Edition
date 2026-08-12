@@ -15,10 +15,10 @@ Do not publish a setup or portable executable until every item below is complete
 
 ## Versioning
 
-Preview 26 currently uses:
+Preview 27 currently uses:
 
-    Product version: 0.26.0
-    Display version: Preview 26
+    Product version: 0.27.0
+    Display version: Preview 27
 
 For stable public releases, prefer semantic tags such as v1.0.0. Every binary asset must identify the same version.
 
@@ -63,7 +63,7 @@ At minimum, verify:
 - Live monitor one-second refresh and compact mode
 - Damage, defense, healing, buff, debuff, EXP, HELM, crafting, chat, and drop reports
 - Player jobs, accuracy, share, multi-attacks, rolls, DoTs, and build comparisons
-- Both server profiles, clean profile switching, KParserBridge installation/update/removal, pet-owner attribution, and player-only/pet-only filters
+- All server profiles, clean profile switching, KParserBridge installation/update/removal, pet-owner attribution, and player-only/pet-only filters
 - Dark and light themes
 - CSV export and party-summary fallback
 - Data cleanup on a fresh application launch

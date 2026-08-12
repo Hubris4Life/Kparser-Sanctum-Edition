@@ -85,6 +85,7 @@ namespace WaywardGamers.KParser.Bridge
         public string PetOwnershipMode { get; set; }
         public bool EstimatedDotsAvailable { get; set; }
         public bool ParserRunning { get; set; }
+        public bool ClientLoggedIn { get; set; }
         public bool DatabaseOpen { get; set; }
         public SanctumEncounterSnapshot Encounter { get; set; }
         public SanctumReportColumnsSnapshot Columns { get; set; }

@@ -72,6 +72,7 @@ namespace WaywardGamers.KParser.Monitoring
         readonly object readerLifecycleSync = new object();
         readonly object memoryOffsetDetectionSync = new object();
         bool headlessMode;
+        volatile bool clientLoggedIn;
         #endregion
 
         #region Interface Control Methods and Properties
@@ -85,6 +86,11 @@ namespace WaywardGamers.KParser.Monitoring
         {
             get { return headlessMode; }
             set { headlessMode = value; }
+        }
+
+        internal bool IsClientLoggedIn
+        {
+            get { return clientLoggedIn; }
         }
 
         internal int CurrentProcessId
@@ -124,6 +130,7 @@ namespace WaywardGamers.KParser.Monitoring
 
                 abortMonitorThread.Reset();
                 IsRunning = true;
+                clientLoggedIn = false;
 
                 try
                 {
@@ -187,6 +194,7 @@ namespace WaywardGamers.KParser.Monitoring
 
                 Abort();
                 IsRunning = false;
+                clientLoggedIn = false;
             }
 
             // Reset/Start can follow Stop immediately. Do not let the next session
@@ -287,6 +295,7 @@ namespace WaywardGamers.KParser.Monitoring
         internal void PolExited(object sender, EventArgs e)
         {
             // Halt monitoring
+            clientLoggedIn = false;
             Stop();
             pol = null;
         }
@@ -303,6 +312,7 @@ namespace WaywardGamers.KParser.Monitoring
             try
             {
                 bool needToLogin = true;
+                clientLoggedIn = false;
 
                 pol = ProcessAccess.GetFFXIProcess(polPID, abortMonitorThread);
                 if (pol == null)
@@ -341,6 +351,7 @@ namespace WaywardGamers.KParser.Monitoring
                     // If polProcess is ever lost (player disconnects), block on trying to reacquire it.
                     if (pol == null)
                     {
+                        clientLoggedIn = false;
                         pol = ProcessAccess.GetFFXIProcess(polPID, abortMonitorThread);
                         if (pol == null)
                         {
@@ -367,6 +378,7 @@ namespace WaywardGamers.KParser.Monitoring
                         // If read failed, it will return null.
                         if (currentDetails == null)
                         {
+                            clientLoggedIn = false;
                             OnReaderStatusChanged(new ReaderStatusEventArgs()
                             {
                                 Active = true,
@@ -381,6 +393,7 @@ namespace WaywardGamers.KParser.Monitoring
                         // pattern.
                         if ((currentDetails.ChatLogInfo.NumberOfLines <= 0) || (currentDetails.ChatLogInfo.NumberOfLines > 50))
                         {
+                            clientLoggedIn = false;
                             OnReaderStatusChanged(new ReaderStatusEventArgs()
                             {
                                 Active = true,
@@ -394,6 +407,8 @@ namespace WaywardGamers.KParser.Monitoring
                             previousDetails = null;
                             continue;
                         }
+
+                        clientLoggedIn = true;
 
                         // If every single field is the same as it was the last time we checked,
                         // assume that the chat log hasn't changed and continue on.
@@ -536,6 +551,7 @@ namespace WaywardGamers.KParser.Monitoring
 
                         if (needToLogin)
                         {
+                            clientLoggedIn = false;
                             OnReaderStatusChanged(new ReaderStatusEventArgs()
                             {
                                 Active = true,
@@ -564,6 +580,7 @@ namespace WaywardGamers.KParser.Monitoring
             }
             finally
             {
+                clientLoggedIn = false;
                 lock (readerLifecycleSync)
                 {
                     if (readerThread == Thread.CurrentThread)

@@ -1,4 +1,4 @@
-KParser - Sanctum Edition, Preview 26
+KParser - Sanctum Edition, Preview 27
 
 KParser reads Final Fantasy XI chat and selected player-state information from a locally running game process. It stores parse databases, settings, exports, and saved build comparisons on this computer. It does not include dedicated analytics or telemetry.
 

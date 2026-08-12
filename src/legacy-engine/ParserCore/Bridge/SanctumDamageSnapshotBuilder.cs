@@ -119,6 +119,8 @@ namespace WaywardGamers.KParser.Bridge
             try
             {
                 snapshot.ParserRunning = Monitor.Instance.IsRunning;
+                snapshot.ClientLoggedIn = snapshot.ParserRunning &&
+                    Monitor.Instance.IsFFXIClientLoggedIn;
                 snapshot.ParseMode = Monitor.Instance.ParseMode.ToString();
             }
             catch (Exception ex)
@@ -153,6 +155,7 @@ namespace WaywardGamers.KParser.Bridge
                     requestedSearchText,
                     excludeCommonDrops,
                     snapshot.ParserRunning,
+                    snapshot.ClientLoggedIn,
                     snapshot.ParseMode);
                 bool cacheable = snapshot.DisplayMode != "dots" || snapshot.ParserRunning == false;
                 if (cacheable)
@@ -221,6 +224,7 @@ namespace WaywardGamers.KParser.Bridge
             string searchText,
             bool excludeCommonDrops,
             bool parserRunning,
+            bool clientLoggedIn,
             string parseMode)
         {
             return string.Join("|", new[]
@@ -235,6 +239,7 @@ namespace WaywardGamers.KParser.Bridge
                 NormalizeSearchText(searchText),
                 excludeCommonDrops ? "exclude-common" : "include-common",
                 parserRunning ? "running" : "stopped",
+                clientLoggedIn ? "logged-in" : "logged-out",
                 parseMode ?? string.Empty,
                 SanctumDotProfileStore.Revision.ToString(CultureInfo.InvariantCulture),
                 ServerCompatibility.CurrentProfile,
@@ -598,6 +603,8 @@ namespace WaywardGamers.KParser.Bridge
                     }
                     if (snapshot.DisplayMode == "multiattacks")
                         return BuildMultiAttacks(events, enemyIds, snapshot.CombatantScope);
+                    if (snapshot.DisplayMode == "criticals")
+                        return BuildCriticalHits(events, enemyIds, snapshot.CombatantScope);
                     if (snapshot.DisplayMode == "dots")
                     {
                         return BuildDamageOverTime(
@@ -2713,6 +2720,126 @@ namespace WaywardGamers.KParser.Bridge
             return result;
         }
 
+        private static List<SanctumCombatantSnapshot> BuildCriticalHits(
+            IEnumerable<KPDatabaseDataSet.InteractionsRow> events,
+            IDictionary<int, int> enemyIds,
+            string combatantScope)
+        {
+            List<SanctumCombatantSnapshot> result = new List<SanctumCombatantSnapshot>();
+            var actorGroups = events
+                .Where(row => row.IsActorIDNull() == false &&
+                              row.IsBattleIDNull() == false &&
+                              row.IsTargetIDNull() == false &&
+                              enemyIds.ContainsKey(row.BattleID) &&
+                              row.TargetID == enemyIds[row.BattleID])
+                .GroupBy(row => row.ActorID);
+
+            foreach (var actorGroup in actorGroups)
+            {
+                KPDatabaseDataSet.CombatantsRow actor =
+                    actorGroup.First().CombatantsRowByActorCombatantRelation;
+                if (actor == null)
+                    continue;
+
+                EntityType entityType = (EntityType)actor.CombatantType;
+                KPDatabaseDataSet.InteractionsRow[] actorEvents = actorGroup.ToArray();
+                if (IsDamageActor(entityType) == false ||
+                    IsInCombatantScope(actor, entityType, actorEvents, combatantScope) == false)
+                {
+                    continue;
+                }
+
+                KPDatabaseDataSet.InteractionsRow[] physicalAttempts = actorEvents
+                    .Where(IsPhysicalAttempt)
+                    .ToArray();
+                KPDatabaseDataSet.InteractionsRow[] eligibleHits = physicalAttempts
+                    .Where(row => row.Preparing == false &&
+                                  ((HarmType)row.HarmType == HarmType.Damage ||
+                                   (HarmType)row.HarmType == HarmType.Drain))
+                    .ToArray();
+                if (eligibleHits.Length == 0)
+                    continue;
+
+                KPDatabaseDataSet.InteractionsRow[] criticalEvents = eligibleHits
+                    .Where(row => (DamageModifier)row.DamageModifier == DamageModifier.Critical &&
+                                  (DefenseType)row.DefenseType != DefenseType.Absorb &&
+                                  row.Amount > 0)
+                    .ToArray();
+                long[] criticalAmounts = criticalEvents
+                    .Select(row => (long)row.Amount)
+                    .ToArray();
+                long criticalDamage = criticalAmounts.Sum();
+                long criticalCount = criticalAmounts.Length;
+                double criticalRate = (double)criticalCount * 100.0 / eligibleHits.Length;
+
+                SanctumCombatantSnapshot reportRow = CreateCombatant(actor, entityType);
+                reportRow.Damage = criticalDamage;
+                reportRow.Dps = criticalRate;
+                reportRow.Melee = criticalCount;
+                reportRow.WeaponSkills = criticalAmounts.Length == 0 ? 0 : criticalAmounts.Max();
+                reportRow.Magic = criticalAmounts.Length == 0 ? 0 : criticalAmounts.Min();
+                reportRow.Other = criticalAmounts.Length == 0
+                    ? 0
+                    : (long)Math.Round(criticalAmounts.Average());
+                reportRow.MeleeDamage = criticalEvents
+                    .Where(row => (ActionType)row.ActionType == ActionType.Melee)
+                    .Sum(row => (long)row.Amount);
+                reportRow.Ranged = criticalEvents
+                    .Where(row => (ActionType)row.ActionType == ActionType.Ranged)
+                    .Sum(row => (long)row.Amount);
+                reportRow.PhysicalAttempts = physicalAttempts.Length;
+                reportRow.PhysicalHits = eligibleHits.Length;
+                reportRow.PhysicalMisses = Math.Max(0, physicalAttempts.Length - eligibleHits.Length);
+                reportRow.CriticalHits = criticalCount;
+                reportRow.Detail1Text = criticalCount.ToString("N0", CultureInfo.InvariantCulture);
+                reportRow.Detail2Text = criticalAmounts.Length == 0
+                    ? "-"
+                    : criticalAmounts.Max().ToString("N0", CultureInfo.InvariantCulture);
+                reportRow.Detail3Text = criticalAmounts.Length == 0
+                    ? "-"
+                    : criticalAmounts.Min().ToString("N0", CultureInfo.InvariantCulture);
+                reportRow.Detail4Text = criticalAmounts.Length == 0
+                    ? "-"
+                    : criticalAmounts.Average().ToString("N1", CultureInfo.InvariantCulture);
+                reportRow.RateText = criticalRate.ToString("0.0", CultureInfo.InvariantCulture) + "%";
+                reportRow.Accuracy = "Eligible melee/ranged hits: " +
+                    eligibleHits.Length.ToString("N0", CultureInfo.InvariantCulture);
+                reportRow.CriticalRate = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Critical hit rate: {0:0.0}%",
+                    criticalRate);
+
+                if (criticalEvents.Length == 0)
+                {
+                    reportRow.TopAction = "No critical hits recorded from " +
+                        eligibleHits.Length.ToString("N0", CultureInfo.InvariantCulture) +
+                        " eligible melee/ranged hit" + (eligibleHits.Length == 1 ? string.Empty : "s");
+                }
+                else
+                {
+                    var topSource = criticalEvents
+                        .GroupBy(GetDetailedActionName)
+                        .Select(group => new
+                        {
+                            Name = group.Key,
+                            Damage = group.Sum(row => (long)row.Amount)
+                        })
+                        .OrderByDescending(source => source.Damage)
+                        .ThenBy(source => source.Name)
+                        .First();
+                    reportRow.TopAction = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Top critical source: {0} - {1:N0} damage",
+                        topSource.Name,
+                        topSource.Damage);
+                }
+
+                result.Add(reportRow);
+            }
+
+            return result;
+        }
+
         private static List<SanctumCombatantSnapshot> BuildDamageDealtByAction(
             IEnumerable<KPDatabaseDataSet.InteractionsRow> events,
             IDictionary<int, int> enemyIds,
@@ -4509,6 +4636,8 @@ namespace WaywardGamers.KParser.Bridge
             long ownerAttempts = owner.Melee;
             long ownerDamaging = owner.WeaponSkills;
             long ownerMaximum = owner.Other;
+            long ownerCriticalHigh = owner.WeaponSkills;
+            long ownerCriticalLow = owner.Magic;
 
             owner.Damage += pet.Damage;
             owner.MeleeDamage += pet.MeleeDamage;
@@ -4543,6 +4672,38 @@ namespace WaywardGamers.KParser.Bridge
                         CultureInfo.InvariantCulture,
                         "Critical hit rate: {0:0.0}%",
                         (double)owner.CriticalHits * 100.0 / owner.PhysicalHits);
+            }
+            else if (displayMode == "criticals")
+            {
+                owner.Melee += pet.Melee;
+                owner.WeaponSkills = Math.Max(ownerCriticalHigh, pet.WeaponSkills);
+                owner.Magic = ownerCriticalLow <= 0
+                    ? pet.Magic
+                    : pet.Magic <= 0 ? ownerCriticalLow : Math.Min(ownerCriticalLow, pet.Magic);
+                owner.Other = owner.CriticalHits == 0
+                    ? 0
+                    : (long)Math.Round((double)owner.Damage / owner.CriticalHits);
+                owner.Dps = owner.PhysicalHits == 0
+                    ? 0.0
+                    : (double)owner.CriticalHits * 100.0 / owner.PhysicalHits;
+                owner.Detail1Text = owner.CriticalHits.ToString("N0", CultureInfo.InvariantCulture);
+                owner.Detail2Text = owner.WeaponSkills <= 0
+                    ? "-"
+                    : owner.WeaponSkills.ToString("N0", CultureInfo.InvariantCulture);
+                owner.Detail3Text = owner.Magic <= 0
+                    ? "-"
+                    : owner.Magic.ToString("N0", CultureInfo.InvariantCulture);
+                owner.Detail4Text = owner.CriticalHits == 0
+                    ? "-"
+                    : ((double)owner.Damage / owner.CriticalHits)
+                        .ToString("N1", CultureInfo.InvariantCulture);
+                owner.RateText = owner.Dps.ToString("0.0", CultureInfo.InvariantCulture) + "%";
+                owner.Accuracy = "Eligible melee/ranged hits: " +
+                    owner.PhysicalHits.ToString("N0", CultureInfo.InvariantCulture);
+                owner.CriticalRate = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Critical hit rate: {0:0.0}%",
+                    owner.Dps);
             }
             else if (displayMode == "dots")
             {
@@ -4840,6 +5001,13 @@ namespace WaywardGamers.KParser.Bridge
                 return rounds == 0 ? 0.0 : (double)multiRounds * 100.0 / rounds;
             }
 
+            if (report == "damageDealt" && displayMode == "criticals")
+            {
+                long eligibleHits = rows.Sum(row => row.PhysicalHits);
+                long criticalHits = rows.Sum(row => row.CriticalHits);
+                return eligibleHits == 0 ? 0.0 : (double)criticalHits * 100.0 / eligibleHits;
+            }
+
             if (report == "damageDealt" && displayMode == "wsrates")
             {
                 long intervals = rows.Sum(row => row.PhysicalAttempts);
@@ -4918,6 +5086,19 @@ namespace WaywardGamers.KParser.Bridge
                 columns.Detail4 = "Retaliations";
                 columns.Total = "INFERRED ATTACK ROUNDS";
                 columns.TotalRate = "EXTRA-ATTACK ROUND RATE";
+                columns.RateSuffix = "%";
+            }
+            else if (displayMode == "criticals")
+            {
+                columns.Primary = "Critical damage";
+                columns.Share = "Crit damage share";
+                columns.Rate = "Crit rate";
+                columns.Detail1 = "Critical hits";
+                columns.Detail2 = "Highest";
+                columns.Detail3 = "Lowest";
+                columns.Detail4 = "Average";
+                columns.Total = "CRITICAL DAMAGE";
+                columns.TotalRate = "OVERALL CRIT RATE";
                 columns.RateSuffix = "%";
             }
             else if (displayMode == "dots")
@@ -5602,7 +5783,7 @@ namespace WaywardGamers.KParser.Bridge
                 case "damageDealt":
                     if (mode == "dots" && ServerCompatibility.SupportsCalculatedDots == false)
                         return "sources";
-                    return mode == "accuracy" || mode == "sources" ||
+                    return mode == "accuracy" || mode == "criticals" || mode == "sources" ||
                            mode == "melee" || mode == "ranged" ||
                            mode == "weaponskills" || mode == "abilities" ||
                            mode == "magic" || mode == "skillchains" ||

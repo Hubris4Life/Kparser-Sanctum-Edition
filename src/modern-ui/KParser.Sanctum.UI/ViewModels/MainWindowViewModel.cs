@@ -203,7 +203,7 @@ internal sealed class MainWindowViewModel : ObservableObject
         : IsCraftingSelected ? "Search crafting" : SelectedDisplayModeKey == "itemsused" ? "Search items used" : "Search loot";
     public bool ShowDamageSourceFooter =>
         (IsDamageDealtSelected && !IsActionGrouping &&
-         SelectedDisplayModeKey is not ("dots" or "timeline" or "wsrates" or "multiattacks")) ||
+         SelectedDisplayModeKey is not ("dots" or "timeline" or "wsrates" or "multiattacks" or "criticals")) ||
         (IsFightsSelected && SelectedDisplayModeKey == "performance");
 
     public bool IsDamageDealtSelected
@@ -337,9 +337,14 @@ internal sealed class MainWindowViewModel : ObservableObject
     public void ConfigureServerProfile(string profile)
     {
         bool isSanctum = string.Equals(profile, "sanctum", StringComparison.OrdinalIgnoreCase);
+        bool isHorizon = string.Equals(profile, "horizon", StringComparison.OrdinalIgnoreCase);
         string previousDisplay = SelectedDisplayMode?.Key ?? "sources";
-        supportsEstimatedDots = isSanctum;
-        ActiveServerLabel = isSanctum ? "SERVER: SANCTUM XI" : "SERVER: OTHER";
+        supportsEstimatedDots = isSanctum || isHorizon;
+        ActiveServerLabel = isSanctum
+            ? "SERVER: SANCTUM XI"
+            : isHorizon
+                ? "SERVER: HORIZON"
+                : "SERVER: OTHER";
 
         UpdateDisplayModes(selectedReport);
         updatingSelectors = true;
@@ -440,7 +445,7 @@ internal sealed class MainWindowViewModel : ObservableObject
             displayDurationSeconds += Math.Max(0, (DateTime.UtcNow - generated.ToUniversalTime()).TotalSeconds);
         var durationText = FormatDuration(displayDurationSeconds);
         var analyticalDamageReport = snapshot.Report == "damageDealt" &&
-                                     snapshot.DisplayMode is "wsrates" or "multiattacks";
+                                     snapshot.DisplayMode is "wsrates" or "multiattacks" or "criticals";
         var usesDurationRate = (snapshot.Report == "damageDealt" && !analyticalDamageReport) ||
                                snapshot.Report == "damageTaken" ||
                                (snapshot.Report == "healing" && snapshot.DisplayMode != "status") ||
@@ -458,6 +463,7 @@ internal sealed class MainWindowViewModel : ObservableObject
                     "timeline" => "Damage Timeline",
                     "wsrates" => "Weapon Skill & TP Cycle Rates",
                     "multiattacks" => "Extra Attack Analysis",
+                    "criticals" => "Critical Hit Analysis",
                     _ => GetReportTitle(snapshot.Report)
                 }
                 : GetReportTitle(snapshot.Report);
@@ -554,6 +560,8 @@ internal sealed class MainWindowViewModel : ObservableObject
                 ? "Weapon skill total"
             : snapshot.Report == "damageDealt" && snapshot.DisplayMode == "multiattacks"
                 ? "Attack round total"
+            : snapshot.Report == "damageDealt" && snapshot.DisplayMode == "criticals"
+                ? "Critical damage total"
             : snapshot.Report == "chat"
                 ? "Visible messages"
             : snapshot.Report == "loot"
@@ -580,6 +588,9 @@ internal sealed class MainWindowViewModel : ObservableObject
                 ? $"{snapshot.Combatants.Count:N0} timeline intervals · {encounter.EventCount:N0} combat events · {encounter.FightCount:N0} {fightWord}"
             : snapshot.Report == "damageDealt" && snapshot.DisplayMode == "wsrates"
                 ? $"{encounter.TotalDamage:N0} weapon skills · observed attack counts are TP-cycle proxies"
+            : snapshot.Report == "damageDealt" && snapshot.DisplayMode == "criticals"
+                ? $"{snapshot.Combatants.Sum(row => row.CriticalHits):N0} critical hits · " +
+                  $"{snapshot.Combatants.Sum(row => row.PhysicalHits):N0} eligible melee/ranged hits"
                 : $"{encounter.EventCount:N0} combat events · {encounter.FightCount:N0} {fightWord}" +
                   (snapshot.Report == "damageDealt" && snapshot.DisplayMode == "dots"
                       ? " · calculated from effect applications"
@@ -870,6 +881,7 @@ internal sealed class MainWindowViewModel : ObservableObject
                     DisplayModes.Add(new ReportFilterOption { Key = "additional", Label = "Additional effects" });
                     DisplayModes.Add(new ReportFilterOption { Key = "reactive", Label = "Reactive damage" });
                     DisplayModes.Add(new ReportFilterOption { Key = "accuracy", Label = "Accuracy" });
+                    DisplayModes.Add(new ReportFilterOption { Key = "criticals", Label = "Critical hits" });
                     DisplayModes.Add(new ReportFilterOption { Key = "timeline", Label = "Damage timeline" });
                     DisplayModes.Add(new ReportFilterOption { Key = "wsrates", Label = "WS / TP cycle rates" });
                     DisplayModes.Add(new ReportFilterOption { Key = "multiattacks", Label = "Multi-attack rounds (inferred)" });

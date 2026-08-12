@@ -1,0 +1,206 @@
+<Window x:Class="KParser.Sanctum.UI.OverlayCustomizationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Overlay Customizations"
+        Width="560"
+        Height="460"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        ShowActivated="True"
+        Topmost="True"
+        Background="{DynamicResource CanvasBrush}"
+        FontFamily="Segoe UI">
+    <Window.Resources>
+        <Color x:Key="ChromeColor">#1B1E23</Color>
+        <Color x:Key="FieldColor">#16191D</Color>
+        <Color x:Key="BorderColor">#424953</Color>
+        <Color x:Key="AccentColor">#CAA656</Color>
+        <Color x:Key="PrimaryTextColor">#EBEDF0</Color>
+        <Color x:Key="MutedTextColor">#AAB0B8</Color>
+        <Color x:Key="CanvasColor">#22262C</Color>
+        <Color x:Key="CanvasTextColor">#EBEDF0</Color>
+        <Color x:Key="CanvasMutedColor">#AAB0B8</Color>
+        <Color x:Key="DetailTextColor">#AAB0B8</Color>
+        <SolidColorBrush x:Key="ChromeBrush" Color="{DynamicResource ChromeColor}" />
+        <SolidColorBrush x:Key="FieldBrush" Color="{DynamicResource FieldColor}" />
+        <SolidColorBrush x:Key="BorderBrush" Color="{DynamicResource BorderColor}" />
+        <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource AccentColor}" />
+        <SolidColorBrush x:Key="PrimaryTextBrush" Color="{DynamicResource PrimaryTextColor}" />
+        <SolidColorBrush x:Key="MutedTextBrush" Color="{DynamicResource MutedTextColor}" />
+        <SolidColorBrush x:Key="CanvasBrush" Color="{DynamicResource CanvasColor}" />
+        <SolidColorBrush x:Key="CanvasTextBrush" Color="{DynamicResource CanvasTextColor}" />
+        <SolidColorBrush x:Key="CanvasMutedBrush" Color="{DynamicResource CanvasMutedColor}" />
+        <SolidColorBrush x:Key="DetailTextBrush" Color="{DynamicResource DetailTextColor}" />
+    </Window.Resources>
+
+    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="38" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Background="{StaticResource ChromeBrush}" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <TextBlock Text="Overlay Customizations"
+                           Foreground="{StaticResource PrimaryTextBrush}"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Margin="14,0" />
+                <Button Content="×"
+                        Width="42"
+                        HorizontalAlignment="Right"
+                        Foreground="{StaticResource MutedTextBrush}"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        FontSize="18"
+                        Click="Cancel_Click" />
+            </Grid>
+
+            <Grid Grid.Row="1" Margin="22,16,22,18">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="Adjust the True Overlay for readability over the game. Changes apply the next time you press Apply."
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource DetailTextBrush}"
+                           FontSize="12" />
+
+                <Border Grid.Row="1"
+                        Margin="0,12,0,14"
+                        Padding="12,9"
+                        Background="{StaticResource ChromeBrush}"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="PreviewName" Text="Nazgul" VerticalAlignment="Center" />
+                        <TextBlock x:Name="PreviewDamage" Grid.Column="1" Text="128,440" Margin="20,0,0,0" VerticalAlignment="Center" />
+                        <TextBlock x:Name="PreviewShare" Grid.Column="2" Text="42.8%" Margin="20,0,0,0" VerticalAlignment="Center" />
+                        <TextBlock x:Name="PreviewAccuracy" Grid.Column="3" Text="94.7%" Margin="20,0,0,0" VerticalAlignment="Center" />
+                        <TextBlock x:Name="PreviewCritical" Grid.Column="4" Text="21.6%" Margin="20,0,0,0" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Row="2" Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="42" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Text size"
+                               Foreground="{StaticResource CanvasTextBrush}"
+                               VerticalAlignment="Center" />
+                    <Slider x:Name="TextSizeSlider"
+                            Grid.Column="1"
+                            Minimum="9"
+                            Maximum="24"
+                            TickFrequency="1"
+                            IsSnapToTickEnabled="True"
+                            ValueChanged="TextSizeSlider_ValueChanged" />
+                    <TextBlock x:Name="TextSizeValue"
+                               Grid.Column="2"
+                               Foreground="{StaticResource CanvasMutedBrush}"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Center" />
+                </Grid>
+
+                <CheckBox x:Name="BoldTextCheckBox"
+                          Grid.Row="3"
+                          Content="Bold player names and statistics"
+                          Foreground="{StaticResource CanvasTextBrush}"
+                          Margin="110,0,0,13"
+                          Checked="Customization_ValueChanged"
+                          Unchecked="Customization_ValueChanged" />
+
+                <Grid Grid.Row="4" Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="34" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Player names"
+                               Foreground="{StaticResource CanvasTextBrush}"
+                               VerticalAlignment="Center" />
+                    <TextBox x:Name="NameColorBox"
+                             Grid.Column="1"
+                             Height="30"
+                             Padding="8,3"
+                             Background="{StaticResource FieldBrush}"
+                             Foreground="{StaticResource PrimaryTextBrush}"
+                             BorderBrush="{StaticResource BorderBrush}"
+                             VerticalContentAlignment="Center"
+                             TextChanged="ColorBox_TextChanged" />
+                    <Border x:Name="NameColorSwatch"
+                            Grid.Column="2"
+                            Width="24"
+                            Height="24"
+                            Margin="10,0,0,0"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            VerticalAlignment="Center" />
+                </Grid>
+
+                <Grid Grid.Row="5" VerticalAlignment="Top">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="34" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Statistics"
+                               Foreground="{StaticResource CanvasTextBrush}"
+                               VerticalAlignment="Center" />
+                    <TextBox x:Name="StatisticColorBox"
+                             Grid.Column="1"
+                             Height="30"
+                             Padding="8,3"
+                             Background="{StaticResource FieldBrush}"
+                             Foreground="{StaticResource PrimaryTextBrush}"
+                             BorderBrush="{StaticResource BorderBrush}"
+                             VerticalContentAlignment="Center"
+                             TextChanged="ColorBox_TextChanged" />
+                    <Border x:Name="StatisticColorSwatch"
+                            Grid.Column="2"
+                            Width="24"
+                            Height="24"
+                            Margin="10,0,0,0"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            VerticalAlignment="Center" />
+                </Grid>
+
+                <Grid Grid.Row="6" Margin="0,18,0,0">
+                    <Button Content="Restore Defaults"
+                            Width="116"
+                            Height="32"
+                            HorizontalAlignment="Left"
+                            Click="RestoreDefaults_Click" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="Cancel" Width="88" Height="32" Margin="0,0,8,0" Click="Cancel_Click" />
+                        <Button Content="Apply"
+                                Width="88"
+                                Height="32"
+                                Background="#8A6A25"
+                                Foreground="White"
+                                BorderBrush="{StaticResource AccentBrush}"
+                                Click="Apply_Click" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

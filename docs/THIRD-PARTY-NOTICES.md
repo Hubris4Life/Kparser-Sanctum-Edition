@@ -1,6 +1,6 @@
 # Third-party notices
 
-This inventory is based on the current Preview 26 source and payload. It must be rechecked for every public binary release. Do not assume that a dependency's current license is identical to the license of the historical binary being distributed.
+This inventory is based on the current Preview 27 source and payload. It must be rechecked for every public binary release. Do not assume that a dependency's current license is identical to the license of the historical binary being distributed.
 
 ## KParser
 

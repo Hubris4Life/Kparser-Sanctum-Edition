@@ -2,7 +2,7 @@
 
 ## Supported environment
 
-KParser - Sanctum Edition supports a fully tested Sanctum XI profile and a conservative Other profile. Individual private servers may still use different chat layouts, offsets, and message rules.
+KParser - Sanctum Edition supports a fully tested Sanctum XI profile, a dedicated Horizon profile, and a conservative Other profile. Individual private servers may still use different chat layouts, offsets, and message rules.
 
 ## Setup edition
 
@@ -29,13 +29,15 @@ Do not replace extracted engine files with files from another release.
 
 ## Server profile
 
-Choose **Server > Sanctum XI** for Sanctum's server-specific pet names and calculated DoT rules. Choose **Server > Other** for observed-log defaults. Changing profiles archives the current parse and starts a clean one.
+Choose **Server > Sanctum XI** for Sanctum's server-specific pet names and calculated DoT rules. Choose **Server > Horizon** for standard LSB-style DoT calculations without Sanctum's custom weapon effects. Choose **Server > Other** for observed-log defaults. Changing profiles archives the current parse and starts a clean one.
 
-## Optional KParserBridge addon for Other
+Horizon uses ordinary pet names. KParser recognizes known pet types, but it does not guess which player owns a generic or ambiguous pet. An unambiguous KParserBridge mapping can attribute that pet to its owner; otherwise its damage remains separate.
 
-Preview 26 includes KParserBridge but does not install or load it automatically. SanctumChat is distributed separately by Sanctum.
+## Optional KParserBridge addon for Horizon and Other
 
-1. Select **Server > Other** and open **Tools > KParserBridge Addon**.
+Preview 27 includes KParserBridge but does not install or load it automatically. SanctumChat is distributed separately by Sanctum.
+
+1. Select **Server > Horizon** or **Server > Other** and open **Tools > KParserBridge Addon**.
 2. Select a detected Ashita v4 installation, or click **Browse** and select its main folder or `addons` folder.
 3. Click **Install / Update**.
 4. In game, run `/addon load kparserbridge`.

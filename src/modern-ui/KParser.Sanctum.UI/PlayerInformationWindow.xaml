@@ -86,6 +86,12 @@
                     <DataGridTextColumn Header="Notes" Binding="{Binding Notes, UpdateSourceTrigger=PropertyChanged}" Width="2.5*" />
                 </DataGrid.Columns>
             </DataGrid>
+            <TextBlock x:Name="EmptyStateText" Grid.Row="2"
+                       Margin="48,0" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Text="No logged-in players detected. Start the parser after entering the game, then reopen Player Information."
+                       TextAlignment="Center" TextWrapping="Wrap" MaxWidth="520"
+                       Foreground="{StaticResource CanvasMutedBrush}" FontSize="13"
+                       IsHitTestVisible="False" Visibility="Collapsed" />
             <Grid Grid.Row="3" Margin="18,14,18,16">
                 <TextBlock Text="Player information is stored locally for this Windows account."
                            VerticalAlignment="Center" Foreground="{StaticResource CanvasMutedBrush}" FontSize="11" />

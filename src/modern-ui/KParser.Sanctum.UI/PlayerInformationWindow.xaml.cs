@@ -13,6 +13,7 @@ public partial class PlayerInformationWindow : Window
         InitializeComponent();
         Entries = new ObservableCollection<PlayerInformationEntry>(entries.Select(item => item.Clone()));
         PlayersGrid.DataContext = Entries;
+        EmptyStateText.Visibility = Entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         Loaded += (_, _) =>
         {
             Activate();

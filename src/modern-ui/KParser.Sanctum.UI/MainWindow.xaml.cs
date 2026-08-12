@@ -42,13 +42,17 @@ public partial class MainWindow : Window
     private DateTimeOffset? lastBridgeSuccessUtc;
     private string lastBridgeError = string.Empty;
     private string memoryDetectionStatus = "Not checked during this dashboard session";
+    private bool startupInitializationStarted;
+    private bool startupSessionResetCompleted;
 
     public MainWindow()
     {
         settings = settingsService.Load();
         settings.ServerProfile = UiSettingsService.NormalizeServerProfile(settings.ServerProfile);
         bridgeClient.ServerProfile = settings.ServerProfile;
-        bridgeClient.PetMappingPath = GetKParserBridgeMappingPath(settings.KParserBridgeAshitaRoot);
+        bridgeClient.PetMappingPath = settings.ServerProfile == "sanctum"
+            ? string.Empty
+            : GetKParserBridgeMappingPath(settings.KParserBridgeAshitaRoot);
         bridgeClient.DisplayPetDamageSeparately = settings.DisplayPetDamageSeparately;
         bridgeClient.LocalPlayerName = string.IsNullOrWhiteSpace(settings.LocalCharacterName)
             ? settings.DotStatCharacterName
@@ -84,6 +88,10 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        if (startupInitializationStarted)
+            return;
+
+        startupInitializationStarted = true;
         try
         {
             var engineReady = await engineProcessManager.EnsureRunningAsync(
@@ -92,9 +100,14 @@ public partial class MainWindow : Window
 
             if (engineReady)
             {
-                viewModel.SetEngineReady(engineProcessManager.OwnsEngineProcess);
-                if (settings.AutoDetectMemoryOnStartup)
-                    await RunStartupMemoryDetectionAsync();
+                if (await ResetStartupSessionAsync(lifetime.Token))
+                {
+                    viewModel.SetEngineReady(engineProcessManager.OwnsEngineProcess);
+                    viewModel.SetUserNotice(
+                        "Ready. Data from the previous application session was cleared automatically.");
+                    if (settings.AutoDetectMemoryOnStartup)
+                        await RunStartupMemoryDetectionAsync();
+                }
             }
             else
             {
@@ -115,13 +128,50 @@ public partial class MainWindow : Window
                 "The bundled engine could not be initialized: " + ex.Message);
         }
 
-        if (settings.CurrentFightOpen)
-            OpenCurrentFightWindow();
-
         if (settings.AutomaticallyCheckForUpdates)
             _ = CheckForUpdatesAsync(false);
 
+        if (!startupSessionResetCompleted)
+            return;
+
+        if (settings.CurrentFightOpen)
+            OpenCurrentFightWindow();
+
         await PollBridgeAsync(lifetime.Token);
+    }
+
+    private async Task<bool> ResetStartupSessionAsync(CancellationToken cancellationToken)
+    {
+        if (startupSessionResetCompleted)
+            return true;
+
+        viewModel.SetEngineCommandBusy("reset");
+        var resetResult = await bridgeClient.SendCommandAsync("resetstopped", cancellationToken);
+        if (!resetResult.Success &&
+            resetResult.Message.Contains("Unsupported engine command", StringComparison.OrdinalIgnoreCase))
+        {
+            // A still-running engine from an older release does not know the atomic
+            // startup command. Preserve compatibility while still clearing its data.
+            resetResult = await bridgeClient.SendCommandAsync("reset", cancellationToken);
+            if (resetResult.Success)
+                resetResult = await bridgeClient.SendCommandAsync("stop", cancellationToken);
+        }
+
+        if (!resetResult.Success || resetResult.ParserRunning || !resetResult.DatabaseOpen)
+        {
+            viewModel.SetEngineLaunchFailed(
+                "KParser connected to the engine but could not clear the previous session: " +
+                resetResult.Message);
+            return false;
+        }
+
+        latestBridgeSnapshot = null;
+        lastBridgeSuccessUtc = null;
+        lastBridgeError = string.Empty;
+        autoCapturedStatsPlayer = null;
+        startupSessionResetCompleted = true;
+        viewModel.ApplyCommandResult(resetResult);
+        return true;
     }
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
@@ -207,6 +257,15 @@ public partial class MainWindow : Window
         string? targetPlayer = null,
         bool confirmReset = true)
     {
+        if (command == "start" && !startupSessionResetCompleted)
+        {
+            viewModel.SetUserNotice(
+                "Start is unavailable until KParser has cleared data from the previous application session.");
+            currentFightViewModel?.SetUserNotice(
+                "Waiting for the automatic startup reset to finish.");
+            return;
+        }
+
         if (command == "reset" && confirmReset)
         {
             var confirmation = MessageBox.Show(
@@ -426,7 +485,7 @@ public partial class MainWindow : Window
         BridgeSnapshot snapshot,
         CancellationToken cancellationToken)
     {
-        if (!string.Equals(settings.ServerProfile, "sanctum", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(settings.ServerProfile, "other", StringComparison.OrdinalIgnoreCase))
             return;
 
         if (DateTime.UtcNow < nextAutomaticStatCaptureUtc)
@@ -513,7 +572,8 @@ public partial class MainWindow : Window
         AccuracyColumn.Header = viewModel.IsCraftingSelected
             ? "Details"
             : viewModel.IsActionGrouping ? "Result" : "Accuracy";
-        AccuracyColumn.Visibility = viewModel.SelectedReport == "damageDealt" ||
+        AccuracyColumn.Visibility = (viewModel.SelectedReport == "damageDealt" &&
+                                     viewModel.SelectedDisplayModeKey != "criticals") ||
                                     viewModel.IsActionGrouping ||
                                     viewModel.IsCraftingSelected ||
                                     (viewModel.SelectedReport == "fights" &&
@@ -617,7 +677,11 @@ public partial class MainWindow : Window
             settings.CurrentFightView,
             settings.CurrentFightAlwaysOnTop,
             settings.CurrentFightDisplayMode,
-            settings.CurrentFightBackgroundTransparencyPercent);
+            settings.CurrentFightBackgroundTransparencyPercent,
+            settings.TrueOverlayTextSize,
+            settings.TrueOverlayBoldText,
+            settings.TrueOverlayNameColor,
+            settings.TrueOverlayStatisticColor);
         currentFightViewModel.ScopeChanged += CurrentFightViewModel_ScopeChanged;
         currentFightViewModel.DisplayModeChanged += CurrentFightViewModel_DisplayModeChanged;
         currentFightViewModel.EngineCommandRequested += CurrentFightViewModel_EngineCommandRequested;
@@ -934,9 +998,10 @@ public partial class MainWindow : Window
 
     private async void PlayerInformation_Click(object sender, RoutedEventArgs e)
     {
+        BridgeSnapshot? players = null;
         try
         {
-            var players = await bridgeClient.GetSnapshotAsync(
+            players = await bridgeClient.GetSnapshotAsync(
                 "all", 0, null, "damageDealt", "all", "sources", "player", lifetime.Token);
             playerInformationService.ObserveAndApply(players);
         }
@@ -949,13 +1014,20 @@ public partial class MainWindow : Window
             // The editor still opens with the player information already observed this session.
         }
 
-        var editor = new PlayerInformationWindow(playerInformationService.GetEntries())
+        var editor = new PlayerInformationWindow(playerInformationService.GetEntriesForSnapshot(players))
         {
             Owner = this
         };
         ThemeService.Apply(editor, settings.IsLightMode);
         if (editor.ShowDialog() != true)
             return;
+
+        if (editor.Entries.Count == 0)
+        {
+            viewModel.SetUserNotice(
+                "No logged-in players were detected. Start the parser after entering the game, then try again.");
+            return;
+        }
 
         if (!playerInformationService.TrySave(editor.Entries, out var error))
         {
@@ -980,6 +1052,34 @@ public partial class MainWindow : Window
         viewModel.SetUserNotice(settings.IsLightMode
             ? "Light Mode is active."
             : "Dark Mode is active.");
+    }
+
+    private void OverlayCustomizations_Click(object sender, RoutedEventArgs e)
+    {
+        var editor = new OverlayCustomizationWindow(
+            settings.TrueOverlayTextSize,
+            settings.TrueOverlayBoldText,
+            settings.TrueOverlayNameColor,
+            settings.TrueOverlayStatisticColor)
+        {
+            Owner = this
+        };
+        ThemeService.Apply(editor, settings.IsLightMode);
+        if (editor.ShowDialog() != true)
+            return;
+
+        settings.TrueOverlayTextSize = editor.TextSize;
+        settings.TrueOverlayBoldText = editor.BoldText;
+        settings.TrueOverlayNameColor = editor.NameColor;
+        settings.TrueOverlayStatisticColor = editor.StatisticColor;
+        currentFightViewModel?.ApplyOverlayCustomization(
+            settings.TrueOverlayTextSize,
+            settings.TrueOverlayBoldText,
+            settings.TrueOverlayNameColor,
+            settings.TrueOverlayStatisticColor);
+        settingsService.TrySave(settings, out _);
+        viewModel.SetUserNotice(
+            "True Overlay text settings were saved and applied.");
     }
 
     private void ApplyThemeToOpenWindows()
@@ -1323,7 +1423,7 @@ public partial class MainWindow : Window
             MessageBox.Show(
                 this,
                 "Sanctum XI pet naming is supplied by Sanctum's own installer. " +
-                "KParserBridge is only needed for the Other server profile.",
+                "KParserBridge is only needed for Horizon or Other server profiles.",
                 "Sanctum XI integration",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -1351,6 +1451,9 @@ public partial class MainWindow : Window
 
     private async void SanctumXiServer_Click(object sender, RoutedEventArgs e) =>
         await ChangeServerProfileAsync("sanctum");
+
+    private async void HorizonServer_Click(object sender, RoutedEventArgs e) =>
+        await ChangeServerProfileAsync("horizon");
 
     private async void OtherServer_Click(object sender, RoutedEventArgs e) =>
         await ChangeServerProfileAsync("other");
@@ -1384,9 +1487,9 @@ public partial class MainWindow : Window
 
         settings.ServerProfile = profile;
         bridgeClient.ServerProfile = profile;
-        bridgeClient.PetMappingPath = profile == "other"
-            ? GetKParserBridgeMappingPath(settings.KParserBridgeAshitaRoot)
-            : string.Empty;
+        bridgeClient.PetMappingPath = profile == "sanctum"
+            ? string.Empty
+            : GetKParserBridgeMappingPath(settings.KParserBridgeAshitaRoot);
         autoCapturedStatsPlayer = null;
         nextAutomaticStatCaptureUtc = DateTime.MinValue;
         viewModel.ConfigureServerProfile(profile);
@@ -1398,9 +1501,12 @@ public partial class MainWindow : Window
         else
             await RefreshSnapshotAsync(lifetime.Token);
 
-        viewModel.SetUserNotice(profile == "sanctum"
-            ? "Sanctum XI profile active: Sanctum pet names and server-specific DoT calculations are enabled."
-            : "Other profile active: observed log data is used; KParserBridge pet mappings are optional.");
+        viewModel.SetUserNotice(profile switch
+        {
+            "sanctum" => "Sanctum XI profile active: Sanctum pet names and server-specific DoT calculations are enabled.",
+            "horizon" => "Horizon profile active: standard LSB-style DoT calculations are enabled. Pet owners are attributed only when KParserBridge provides an unambiguous mapping.",
+            _ => "Other profile active: observed log data is used; KParserBridge pet mappings are optional."
+        });
     }
 
     private void UpdateServerProfileMenu()
@@ -1409,8 +1515,13 @@ public partial class MainWindow : Window
             settings.ServerProfile,
             "sanctum",
             StringComparison.OrdinalIgnoreCase);
+        bool isHorizon = string.Equals(
+            settings.ServerProfile,
+            "horizon",
+            StringComparison.OrdinalIgnoreCase);
         SanctumXiServerMenuItem.IsChecked = isSanctum;
-        OtherServerMenuItem.IsChecked = !isSanctum;
+        HorizonServerMenuItem.IsChecked = isHorizon;
+        OtherServerMenuItem.IsChecked = !isSanctum && !isHorizon;
         KParserBridgeAddonMenuItem.IsEnabled = !isSanctum;
     }
 

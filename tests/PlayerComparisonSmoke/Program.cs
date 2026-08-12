@@ -12,6 +12,7 @@ try
     if (startup.Combatants.Count != 0)
         throw new InvalidOperationException("The main window still contains demonstration parse rows.");
     startup.ConfigureServerProfile("sanctum");
+    VerifyPlayerInformationDetectionGuards();
     startup.IsDamageDealtSelected = true;
     var combatantScopes = startup.CombatantScopes.Select(scope => scope.Label).ToArray();
     if (!combatantScopes.SequenceEqual(new[] { "Alliance", "Party", "Self" }))
@@ -33,11 +34,21 @@ try
     startup.SetEngineReady(startedBundledEngine: true);
     if (!startup.CanCaptureDotStats || startup.SelectedCombatant is not null || startup.ParserRunning)
         throw new InvalidOperationException("Stopped-session DoT stat capture is not available from the clean main page.");
+    startup.ConfigureServerProfile("horizon");
+    if (!startup.CanCaptureDotStats || startup.ActiveServerLabel != "SERVER: HORIZON")
+        throw new InvalidOperationException("Horizon did not enable standard DoT support and its server label.");
     startup.ConfigureServerProfile("other");
     if (startup.CanCaptureDotStats)
         throw new InvalidOperationException("Other-server mode unexpectedly enabled Sanctum DoT stat capture.");
     startup.ConfigureServerProfile("sanctum");
-    if (!startup.DisplayModes.Any(mode => mode.Key == "timeline") ||
+    if (UiSettingsService.NormalizeServerProfile("Horizon XI") != "horizon" ||
+        UiSettingsService.NormalizeServerProfile("horizon-xi") != "horizon" ||
+        UiSettingsService.NormalizeServerProfile("unknown") != "other")
+    {
+        throw new InvalidOperationException("Horizon server-profile normalization is invalid.");
+    }
+    if (!startup.DisplayModes.Any(mode => mode.Key == "criticals") ||
+        !startup.DisplayModes.Any(mode => mode.Key == "timeline") ||
         !startup.DisplayModes.Any(mode => mode.Key == "wsrates"))
     {
         throw new InvalidOperationException("The legacy-parity damage displays are missing.");
@@ -116,8 +127,14 @@ try
 
     var overlay = new CurrentFightViewModel("all", "all", false, "overlay", 0);
     overlay.ApplySnapshot(exportSnapshot);
-    if (!overlay.IsTrueOverlayMode || overlay.Combatants.Single().CriticalRateDisplay != "20.0%")
+    if (!overlay.IsTrueOverlayMode ||
+        overlay.Combatants.Single().CriticalRateDisplay != "20.0%" ||
+        !overlay.OverlayBoldText ||
+        overlay.OverlayTextSize != 12)
         throw new InvalidOperationException("True Overlay did not retain the physical critical-hit rate.");
+    overlay.ApplyOverlayCustomization(16, false, "#112233", "#445566");
+    if (overlay.OverlayTextSize != 16 || overlay.OverlayBoldText)
+        throw new InvalidOperationException("True Overlay customization did not apply immediately.");
     var overlayCsv = ReportExportService.BuildCurrentFightCsv(overlay);
     if (!overlayCsv.Contains("Critical rate") || !overlayCsv.Contains("20.0%"))
         throw new InvalidOperationException("The live-monitor export omitted critical-hit rate.");
@@ -208,6 +225,8 @@ try
     {
         throw new InvalidOperationException("The copied diagnostic report is incomplete or exposes a full user path.");
     }
+    if (DiagnosticReportService.GetServerProfileLabel("horizon") != "Horizon")
+        throw new InvalidOperationException("Diagnostics did not recognize the Horizon profile.");
 
     var service = new PlayerParseService(root);
     service.Save(CreateSnapshot("Baseline", 100_000, 500.0, 90, 100));
@@ -237,6 +256,7 @@ try
     Console.WriteLine("comparison-metrics=" + comparison.Metrics.Count);
     Console.WriteLine("comparison-selection=verified");
     Console.WriteLine("clean-startup=verified");
+    Console.WriteLine("player-information-detection=verified");
     Console.WriteLine("stopped-dot-capture=verified");
     Console.WriteLine("combatant-scopes=verified");
     Console.WriteLine("pet-display-scopes=verified");
@@ -250,6 +270,46 @@ finally
 {
     if (Directory.Exists(root))
         Directory.Delete(root, recursive: true);
+}
+
+static void VerifyPlayerInformationDetectionGuards()
+{
+    var offline = new BridgeSnapshot
+    {
+        ParserRunning = false,
+        ClientLoggedIn = false,
+        GroupMode = "player",
+        Columns = new BridgeReportColumns { Secondary = "Job" }
+    };
+    var actionGrouped = new BridgeSnapshot
+    {
+        ParserRunning = true,
+        ClientLoggedIn = true,
+        GroupMode = "action",
+        Columns = new BridgeReportColumns { Secondary = "Action" }
+    };
+    var livePlayers = new BridgeSnapshot
+    {
+        ParserRunning = true,
+        ClientLoggedIn = true,
+        GroupMode = "player",
+        Columns = new BridgeReportColumns { Secondary = "Job" }
+    };
+
+    if (PlayerInformationService.CanObserveDetectedPlayers(offline) ||
+        PlayerInformationService.CanObserveDetectedPlayers(actionGrouped) ||
+        !PlayerInformationService.CanObserveDetectedPlayers(livePlayers))
+    {
+        throw new InvalidOperationException(
+            "Player Information did not enforce live, logged-in player-job snapshots.");
+    }
+
+    if (PlayerInformationService.IsDetectedJobLabel("Bio II") ||
+        !PlayerInformationService.IsDetectedJobLabel("PLD / WAR") ||
+        !PlayerInformationService.IsDetectedJobLabel("WAR99"))
+    {
+        throw new InvalidOperationException("Player Information accepted an action as a detected job.");
+    }
 }
 
 static PlayerParseSnapshot CreateSnapshot(

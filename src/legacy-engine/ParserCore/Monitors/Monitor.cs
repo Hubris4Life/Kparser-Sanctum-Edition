@@ -547,6 +547,15 @@ namespace WaywardGamers.KParser.Monitoring
         {
             get { return RamReader.Instance.CurrentProcessId; }
         }
+
+        /// <summary>
+        /// Returns whether the active RAM reader has validated a live in-game chat
+        /// buffer. A running client at character selection is deliberately false.
+        /// </summary>
+        public bool IsFFXIClientLoggedIn
+        {
+            get { return RamReader.Instance.IsClientLoggedIn; }
+        }
         #endregion
 
         #region Debugging functions

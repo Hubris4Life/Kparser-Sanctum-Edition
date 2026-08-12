@@ -50,10 +50,7 @@ internal static class DiagnosticReportService
             ? "Not registered"
             : context.RegisteredPlayer);
 
-        Add(items, "Compatibility", "Server profile",
-            string.Equals(context.ServerProfile, "sanctum", StringComparison.OrdinalIgnoreCase)
-                ? "Sanctum XI"
-                : "Other");
+        Add(items, "Compatibility", "Server profile", GetServerProfileLabel(context.ServerProfile));
         Add(items, "Compatibility", "Pet ownership", TextOrUnknown(context.PetOwnershipMode));
         Add(items, "Compatibility", "Unresolved pets", context.UnresolvedPetStatus);
         Add(items, "Compatibility", "Pet display", context.DisplayPetDamageSeparately
@@ -100,6 +97,15 @@ internal static class DiagnosticReportService
             error = ex.Message;
             return false;
         }
+    }
+
+    internal static string GetServerProfileLabel(string? profile)
+    {
+        if (string.Equals(profile, "sanctum", StringComparison.OrdinalIgnoreCase))
+            return "Sanctum XI";
+        if (string.Equals(profile, "horizon", StringComparison.OrdinalIgnoreCase))
+            return "Horizon";
+        return "Other";
     }
 
     private static void Add(

@@ -534,6 +534,10 @@
                               Header="Sanctum XI"
                               IsCheckable="True"
                               Click="SanctumXiServer_Click" />
+                    <MenuItem x:Name="HorizonServerMenuItem"
+                              Header="Horizon"
+                              IsCheckable="True"
+                              Click="HorizonServer_Click" />
                     <MenuItem x:Name="OtherServerMenuItem"
                               Header="Other"
                               IsCheckable="True"
@@ -541,6 +545,7 @@
                 </MenuItem>
                 <MenuItem Header="Options" Padding="10,6">
                     <MenuItem Header="Player Information…" Click="PlayerInformation_Click" />
+                    <MenuItem Header="Overlay Customizations…" Click="OverlayCustomizations_Click" />
                     <Separator />
                     <MenuItem Header="Detect memory now" Command="{Binding DetectMemoryCommand}" IsEnabled="{Binding IsDetectEnabled}" />
                     <MenuItem Header="Register Player Stats…"

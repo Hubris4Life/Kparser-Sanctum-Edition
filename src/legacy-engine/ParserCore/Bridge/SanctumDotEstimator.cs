@@ -10,9 +10,10 @@ using WaywardGamers.KParser.Parsing;
 namespace WaywardGamers.KParser.Bridge
 {
     /// <summary>
-    /// Builds a conservative damage-over-time estimate from effects that the
-    /// Sanctum server applies without emitting damage lines to the FFXI log.
-    /// The values intentionally remain separate from KParser's observed damage.
+    /// Builds a conservative damage-over-time estimate from effects that a
+    /// supported server applies without emitting damage lines to the FFXI log.
+    /// Standard rules are shared with Horizon; explicitly marked custom rules
+    /// remain Sanctum-only. Estimates stay separate from observed damage.
     /// </summary>
     internal static class SanctumDotEstimator
     {
@@ -63,6 +64,7 @@ namespace WaywardGamers.KParser.Bridge
 
                 DotRule rule;
                 if (Rules.TryGetValue(normalizedActionName, out rule) == false ||
+                    (rule.SanctumOnly && ServerCompatibility.IsSanctumXi == false) ||
                     IsSuccessfulApplication(row, rule) == false)
                 {
                     continue;
@@ -654,29 +656,31 @@ namespace WaywardGamers.KParser.Bridge
                 "Queasyshroom");
             Add(rules, Fixed("poison", 5, 3, 60, 0), "Poison Breath");
 
+            // Sanctum adds persistent elemental damage to these weapon skills.
+            // Horizon follows the ordinary LSB behavior and must not inherit it.
             Add(
                 rules,
-                DamageApplied(Scaled(
+                SanctumOnly(DamageApplied(Scaled(
                     Fixed("burn", 15, 3, 45, 0, "frost"),
-                    DotPowerFormula.SwordBurn)),
+                    DotPowerFormula.SwordBurn))),
                 "Burning Blade");
             Add(
                 rules,
-                DamageApplied(Scaled(
+                SanctumOnly(DamageApplied(Scaled(
                     Fixed("burn", 15, 3, 30, 0, "frost"),
-                    DotPowerFormula.MarksmanshipBurn)),
+                    DotPowerFormula.MarksmanshipBurn))),
                 "Hot Shot");
             Add(
                 rules,
-                DamageApplied(Scaled(
+                SanctumOnly(DamageApplied(Scaled(
                     Fixed("burn", 15, 3, 30, 0, "frost"),
-                    DotPowerFormula.ArcheryBurn)),
+                    DotPowerFormula.ArcheryBurn))),
                 "Flaming Arrow");
             Add(
                 rules,
-                DamageApplied(Scaled(
+                SanctumOnly(DamageApplied(Scaled(
                     Fixed("shock", 17, 3, 60, 0, "drown"),
-                    DotPowerFormula.ClubShock)),
+                    DotPowerFormula.ClubShock))),
                 "Brainshaker");
             Add(
                 rules,
@@ -806,6 +810,12 @@ namespace WaywardGamers.KParser.Bridge
             return rule;
         }
 
+        private static DotRule SanctumOnly(DotRule rule)
+        {
+            rule.SanctumOnly = true;
+            return rule;
+        }
+
         private static DotRule PetVariant(
             DotRule rule,
             int power,
@@ -849,6 +859,7 @@ namespace WaywardGamers.KParser.Bridge
             public int PetDurationSeconds { get; set; }
             public DotPowerFormula PetPowerFormula { get; set; }
             public bool PetApplyWhenDamageLands { get; set; }
+            public bool SanctumOnly { get; set; }
         }
 
         private enum DotPowerFormula

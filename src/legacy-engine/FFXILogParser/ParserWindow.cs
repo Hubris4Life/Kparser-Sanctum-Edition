@@ -2328,6 +2328,13 @@ namespace WaywardGamers.KParser
                         return CreateBridgeCommandResult(
                             command.Name, true, "The previous parse was archived and a new parse was started.", null);
 
+                    case "resetstopped":
+                        StopParsingForBridge();
+                        StartParsingForBridge(true);
+                        StopParsingForBridge();
+                        return CreateBridgeCommandResult(
+                            command.Name, true, "The previous parse was archived and a clean stopped parse was prepared.", null);
+
                     case "detect":
                         return DetectMemoryOffsetForBridge(command.Name);
 

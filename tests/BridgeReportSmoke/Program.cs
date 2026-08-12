@@ -33,8 +33,10 @@ namespace BridgeReportSmoke
             {
                 VerifyDotEstimatorRules();
                 VerifyExtendedDotEstimatorRules();
+                VerifyHorizonDotRules();
                 VerifyPlayerStatLayout();
                 Console.WriteLine("dot-estimator-rules=verified");
+                Console.WriteLine("horizon-dot-rules=verified");
                 Console.WriteLine("player-stat-layout=verified");
                 return 0;
             }
@@ -50,6 +52,7 @@ namespace BridgeReportSmoke
             VerifyRamReaderStopsBeforeReturning();
             VerifyDotEstimatorRules();
             VerifyExtendedDotEstimatorRules();
+            VerifyHorizonDotRules();
             VerifyPlayerStatLayout();
             VerifyCriticalRateDenominators();
             ConfigureWritableDefaultDirectory(databasePath);
@@ -102,6 +105,7 @@ namespace BridgeReportSmoke
                 Console.WriteLine("verified-displays=" + verifiedDisplays);
                 Console.WriteLine("dot-report=verified");
                 Console.WriteLine("dot-estimator=verified");
+                Console.WriteLine("horizon-dot-rules=verified");
                 Console.WriteLine("ram-reader-lifecycle=verified");
                 Console.WriteLine("fight-reports=verified");
                 Console.WriteLine("chat-report=verified");
@@ -374,13 +378,20 @@ namespace BridgeReportSmoke
             MethodInfo configure = compatibility.GetMethod(
                 "Configure",
                 BindingFlags.Static | BindingFlags.NonPublic);
+            PropertyInfo currentProfile = compatibility.GetProperty(
+                "CurrentProfile",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            PropertyInfo supportsCalculatedDots = compatibility.GetProperty(
+                "SupportsCalculatedDots",
+                BindingFlags.Static | BindingFlags.NonPublic);
             Type classifier = parserCore.GetType(
                 "WaywardGamers.KParser.Parsing.ClassifyEntity",
                 true);
             MethodInfo classify = classifier.GetMethod(
                 "ClassifyByName",
                 BindingFlags.Static | BindingFlags.NonPublic);
-            if (configure == null || classify == null)
+            if (configure == null || currentProfile == null ||
+                supportsCalculatedDots == null || classify == null)
                 throw new MissingMemberException("Compatibility profile members were not found.");
 
             string temporaryDirectory = Path.Combine(
@@ -406,6 +417,29 @@ namespace BridgeReportSmoke
                     new object[] { "Garuda@Nazgul" });
                 if (sanctumAliasInOther == EntityType.Pet)
                     throw new InvalidOperationException("Other profile applied Sanctum pet-name rules.");
+
+                configure.Invoke(null, new object[] { "horizon-xi", mappingPath });
+                if ((string)currentProfile.GetValue(null, null) != "horizon" ||
+                    (bool)supportsCalculatedDots.GetValue(null, null) == false)
+                {
+                    throw new InvalidOperationException(
+                        "Horizon profile did not normalize or enable standard calculated DoTs.");
+                }
+                EntityType horizonMapped = (EntityType)classify.Invoke(
+                    null,
+                    new object[] { "TestCompanion" });
+                if (horizonMapped != EntityType.Pet)
+                    throw new InvalidOperationException("Horizon profile did not recognize a mapped pet.");
+                EntityType horizonAvatar = (EntityType)classify.Invoke(
+                    null,
+                    new object[] { "Garuda" });
+                if (horizonAvatar != EntityType.Pet)
+                    throw new InvalidOperationException("Horizon did not recognize a standard avatar pet name.");
+                EntityType sanctumAliasInHorizon = (EntityType)classify.Invoke(
+                    null,
+                    new object[] { "Garuda@Nazgul" });
+                if (sanctumAliasInHorizon == EntityType.Pet)
+                    throw new InvalidOperationException("Horizon applied Sanctum pet-name rules.");
 
                 configure.Invoke(null, new object[] { "sanctum", string.Empty });
                 EntityType sanctumAlias = (EntityType)classify.Invoke(
@@ -484,7 +518,14 @@ namespace BridgeReportSmoke
             MethodInfo combinedRate = builder.GetMethod(
                 "GetCriticalRate",
                 BindingFlags.Static | BindingFlags.NonPublic);
-            if (categoryRate == null || combinedRate == null)
+            MethodInfo criticalReport = builder.GetMethod(
+                "BuildCriticalHits",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo mergePetDamage = builder.GetMethod(
+                "MergeSanctumPetDamage",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            if (categoryRate == null || combinedRate == null ||
+                criticalReport == null || mergePetDamage == null)
                 throw new MissingMemberException("Critical-rate helpers could not be tested.");
 
             KPDatabaseDataSet data = new KPDatabaseDataSet();
@@ -522,6 +563,50 @@ namespace BridgeReportSmoke
             {
                 throw new InvalidOperationException(
                     "Combined critical rate did not use successful melee/ranged hits: " + combined);
+            }
+
+            var enemyIds = new Dictionary<int, int>
+            {
+                { battle.BattleID, enemy.CombatantID }
+            };
+            IList criticalRows = (IList)criticalReport.Invoke(
+                null,
+                new object[] { allRows, enemyIds, "all" });
+            if (criticalRows.Count != 1)
+                throw new InvalidOperationException("Critical-hit report did not return its physical combatant.");
+            object criticalRow = criticalRows[0];
+            if ((long)criticalRow.GetType().GetProperty("Damage").GetValue(criticalRow, null) != 200L ||
+                (long)criticalRow.GetType().GetProperty("Melee").GetValue(criticalRow, null) != 2L ||
+                (long)criticalRow.GetType().GetProperty("WeaponSkills").GetValue(criticalRow, null) != 100L ||
+                (long)criticalRow.GetType().GetProperty("Magic").GetValue(criticalRow, null) != 100L ||
+                (long)criticalRow.GetType().GetProperty("Other").GetValue(criticalRow, null) != 100L ||
+                Math.Abs((double)criticalRow.GetType().GetProperty("Dps").GetValue(criticalRow, null) - 33.3333) > 0.01)
+            {
+                throw new InvalidOperationException("Critical-hit high/low/average/rate aggregation is invalid.");
+            }
+
+            object petCriticalRow = Activator.CreateInstance(criticalRow.GetType(), true);
+            SetSnapshotValue(petCriticalRow, "Damage", 300L);
+            SetSnapshotValue(petCriticalRow, "Melee", 2L);
+            SetSnapshotValue(petCriticalRow, "WeaponSkills", 250L);
+            SetSnapshotValue(petCriticalRow, "Magic", 50L);
+            SetSnapshotValue(petCriticalRow, "Other", 150L);
+            SetSnapshotValue(petCriticalRow, "PhysicalAttempts", 5L);
+            SetSnapshotValue(petCriticalRow, "PhysicalHits", 4L);
+            SetSnapshotValue(petCriticalRow, "PhysicalMisses", 1L);
+            SetSnapshotValue(petCriticalRow, "CriticalHits", 2L);
+            SetSnapshotValue(petCriticalRow, "TopAction", "Pet critical test");
+            mergePetDamage.Invoke(
+                null,
+                new object[] { criticalRow, petCriticalRow, "criticals", "player", 30.0 });
+            if ((long)criticalRow.GetType().GetProperty("Damage").GetValue(criticalRow, null) != 500L ||
+                (long)criticalRow.GetType().GetProperty("Melee").GetValue(criticalRow, null) != 4L ||
+                (long)criticalRow.GetType().GetProperty("WeaponSkills").GetValue(criticalRow, null) != 250L ||
+                (long)criticalRow.GetType().GetProperty("Magic").GetValue(criticalRow, null) != 50L ||
+                (long)criticalRow.GetType().GetProperty("Other").GetValue(criticalRow, null) != 125L ||
+                Math.Abs((double)criticalRow.GetType().GetProperty("Dps").GetValue(criticalRow, null) - 40.0) > 0.01)
+            {
+                throw new InvalidOperationException("Owned-pet critical-hit aggregation is invalid.");
             }
         }
 
@@ -569,7 +654,7 @@ namespace BridgeReportSmoke
                 .FirstOrDefault(row => row.ActionName == actionName) ??
                 data.Actions.AddActionsRow(actionName);
             return data.Interactions.AddInteractionsRow(
-                timestamp, actor, target, battle, (byte)ActorType.Self, false, action,
+                timestamp, actor, target, battle, (byte)ActorPlayerType.Self, false, action,
                 (byte)actionType, (byte)FailedActionType.None,
                 (byte)(damage == 0 ? DefenseType.Evasion : DefenseType.None),
                 0, (byte)AidType.None, (byte)RecoveryType.None,
@@ -999,6 +1084,7 @@ namespace BridgeReportSmoke
         {
             string[][] reports =
             {
+                new[] { "damageDealt", "criticals" },
                 new[] { "damageDealt", "multiattacks" },
                 new[] { "damageDealt", "timeline" },
                 new[] { "damageDealt", "wsrates" },
@@ -1625,6 +1711,86 @@ namespace BridgeReportSmoke
             }
 
             SanctumDotProfileStore.Clear();
+        }
+
+        private static void VerifyHorizonDotRules()
+        {
+            SanctumDotProfileStore.Clear();
+            Assembly parserCore = typeof(DatabaseManager).Assembly;
+            Type compatibility = parserCore.GetType(
+                "WaywardGamers.KParser.Bridge.ServerCompatibility",
+                true);
+            MethodInfo configure = compatibility.GetMethod(
+                "Configure",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Type estimator = parserCore.GetType(
+                "WaywardGamers.KParser.Bridge.SanctumDotEstimator",
+                true);
+            MethodInfo estimate = estimator.GetMethod(
+                "Estimate",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            if (configure == null || estimate == null)
+                throw new MissingMemberException("Horizon DoT compatibility members were not found.");
+
+            KPDatabaseDataSet data = new KPDatabaseDataSet();
+            KPDatabaseDataSet.CombatantsRow player = data.Combatants.AddCombatantsRow(
+                "HorizonDotTester",
+                (byte)EntityType.Player,
+                null);
+            DateTime start = new DateTime(2026, 8, 12, 1, 0, 0, DateTimeKind.Utc);
+            List<KPDatabaseDataSet.BattlesRow> battles =
+                new List<KPDatabaseDataSet.BattlesRow>();
+            Dictionary<int, int> enemyIds = new Dictionary<int, int>();
+
+            KPDatabaseDataSet.BattlesRow poison = AddDotTestBattle(
+                data, player, "Horizon Poison Target", start, 30, battles, enemyIds);
+            AddEnfeeble(
+                data,
+                poison,
+                player,
+                poison.CombatantsRowByEnemyCombatantRelation,
+                "Poison",
+                start);
+            KPDatabaseDataSet.BattlesRow hotShot = AddDotTestBattle(
+                data, player, "Horizon Hot Shot Target", start, 30, battles, enemyIds);
+            AddDamage(
+                data,
+                hotShot,
+                player,
+                hotShot.CombatantsRowByEnemyCombatantRelation,
+                "Hot Shot",
+                start,
+                100,
+                ActionType.Weaponskill);
+
+            try
+            {
+                configure.Invoke(null, new object[] { "horizon", string.Empty });
+                IEnumerable results = (IEnumerable)estimate.Invoke(null, new object[]
+                {
+                    battles,
+                    data.Interactions,
+                    enemyIds,
+                    false
+                });
+                List<string> actions = new List<string>();
+                foreach (object result in results)
+                {
+                    actions.Add((string)result.GetType()
+                        .GetProperty("ActionName").GetValue(result, null));
+                }
+
+                if (actions.Contains("Poison") == false || actions.Contains("Hot Shot"))
+                {
+                    throw new InvalidOperationException(
+                        "Horizon did not retain standard DoTs while excluding Sanctum-only weapon effects.");
+                }
+            }
+            finally
+            {
+                configure.Invoke(null, new object[] { "sanctum", string.Empty });
+                SanctumDotProfileStore.Clear();
+            }
         }
 
         private static KPDatabaseDataSet.BattlesRow AddDotTestBattle(

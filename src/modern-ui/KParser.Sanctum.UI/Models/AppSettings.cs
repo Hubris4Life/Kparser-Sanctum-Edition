@@ -34,6 +34,10 @@ internal sealed class AppSettings
     public string CurrentFightCombatantScope { get; set; } = "all";
     public string CurrentFightView { get; set; } = "all";
     public double CurrentFightBackgroundTransparencyPercent { get; set; }
+    public double TrueOverlayTextSize { get; set; } = 12;
+    public bool TrueOverlayBoldText { get; set; } = true;
+    public string TrueOverlayNameColor { get; set; } = "#F0D18A";
+    public string TrueOverlayStatisticColor { get; set; } = "#EBEDF0";
     public bool CurrentFightAlwaysOnTop { get; set; }
     public bool CurrentFightCompactMode { get; set; }
     public string CurrentFightDisplayMode { get; set; } = string.Empty;

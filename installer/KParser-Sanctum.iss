@@ -1,12 +1,12 @@
 #define MyAppName "KParser - Sanctum Edition"
 #ifndef MyAppVersion
-#define MyAppVersion "Preview 26"
+#define MyAppVersion "Preview 27"
 #endif
 #ifndef MyAppNumericVersion
-#define MyAppNumericVersion "0.26.0.0"
+#define MyAppNumericVersion "0.27.0.0"
 #endif
 #ifndef MyOutputBaseFilename
-#define MyOutputBaseFilename "KParser-Sanctum-Setup-Preview-26"
+#define MyOutputBaseFilename "KParser-Sanctum-Setup-Preview-27"
 #endif
 #define MyAppExeName "KParser-Sanctum-Modern.exe"
 

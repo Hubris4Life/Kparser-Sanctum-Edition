@@ -4,6 +4,24 @@ All notable public changes should be documented here. Preview entries describe d
 
 ## Unreleased
 
+## Preview 27 - 0.27.0 - 2026-08-12
+
+### Added
+
+- Added a transparency slider directly to the True Overlay toolbar.
+- Added **Options > Overlay Customizations** with persistent text size, bold text, player-name color, statistic color, live preview, and default restoration. True Overlay player names and statistics are bold by default.
+- Added a dedicated **Server > Horizon** profile. It enables standard LSB-style calculated DoTs and player-stat capture while excluding Sanctum-only weapon-effect rules.
+- Added **Damage Dealt > Critical hits**, showing each combatant's total critical damage, critical-damage share, critical-hit count, highest, lowest, average, and critical rate from eligible melee/ranged hits.
+
+### Compatibility
+
+- Horizon recognizes standard pet types and can use optional KParserBridge owner mappings. Generic or ambiguous pet names are never guessed and remain unattributed/separate when no reliable mapping exists.
+
+### Fixed
+
+- Player Information now lists only players from a validated, logged-in live parser session, rejects action-group rows such as Bio II as job labels, and preserves saved overrides without displaying stale offline players.
+- Application startup now archives the previous parser session, creates a clean database, and leaves parsing stopped before Start becomes available, preventing stale data from reappearing on first use.
+
 ## Preview 26 - 0.26.0 - 2026
 
 ### Added

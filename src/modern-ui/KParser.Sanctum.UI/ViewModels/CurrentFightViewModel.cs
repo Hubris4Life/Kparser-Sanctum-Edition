@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using KParser.Sanctum.UI.Bridge;
@@ -11,6 +12,8 @@ internal sealed class CurrentFightViewModel : ObservableObject
 {
     private static readonly Brush RunningBrush = CreateBrush(78, 194, 126);
     private static readonly Brush StoppedBrush = CreateBrush(218, 80, 87);
+    private static readonly Brush DefaultOverlayNameBrush = CreateBrush(240, 209, 138);
+    private static readonly Brush DefaultOverlayStatisticBrush = CreateBrush(235, 237, 240);
 
     private string selectedCombatantScope = "all";
     private string selectedFightView = "all";
@@ -29,6 +32,10 @@ internal sealed class CurrentFightViewModel : ObservableObject
     private bool isAlwaysOnTop;
     private string monitorDisplayMode = "full";
     private double backgroundTransparencyPercent;
+    private double overlayTextSize = 12;
+    private bool overlayBoldText = true;
+    private Brush overlayNameBrush = DefaultOverlayNameBrush;
+    private Brush overlayStatisticBrush = DefaultOverlayStatisticBrush;
     private CombatantRow? selectedCombatant;
 
     public CurrentFightViewModel(
@@ -36,13 +43,22 @@ internal sealed class CurrentFightViewModel : ObservableObject
         string fightView,
         bool alwaysOnTop,
         string displayMode,
-        double backgroundTransparency)
+        double backgroundTransparency,
+        double trueOverlayTextSize = 12,
+        bool trueOverlayBoldText = true,
+        string trueOverlayNameColor = "#F0D18A",
+        string trueOverlayStatisticColor = "#EBEDF0")
     {
         selectedCombatantScope = NormalizeScope(combatantScope);
         selectedFightView = NormalizeFightView(fightView);
         isAlwaysOnTop = alwaysOnTop;
         monitorDisplayMode = NormalizeDisplayMode(displayMode);
         backgroundTransparencyPercent = Math.Clamp(backgroundTransparency, 0, 100);
+        ApplyOverlayCustomization(
+            trueOverlayTextSize,
+            trueOverlayBoldText,
+            trueOverlayNameColor,
+            trueOverlayStatisticColor);
         Combatants = [];
         StartParserCommand = new DelegateCommand(() => RequestEngineCommand("start"));
         StopParserCommand = new DelegateCommand(() => RequestEngineCommand("stop"));
@@ -87,6 +103,12 @@ internal sealed class CurrentFightViewModel : ObservableObject
     public string Notice { get => notice; private set => SetProperty(ref notice, value); }
     public string ViewLabel => selectedFightView == "all" ? "ALL MOB FIGHTS" : "CURRENT FIGHT";
     public double BackgroundOpacity => 1.0 - (BackgroundTransparencyPercent / 100.0);
+    public double OverlayTextSize => overlayTextSize;
+    public double OverlayRowHeight => Math.Ceiling(overlayTextSize + 10);
+    public bool OverlayBoldText => overlayBoldText;
+    public FontWeight OverlayFontWeight => overlayBoldText ? FontWeights.Bold : FontWeights.Normal;
+    public Brush OverlayNameBrush => overlayNameBrush;
+    public Brush OverlayStatisticBrush => overlayStatisticBrush;
 
     public Brush ParserStatusBrush
     {
@@ -345,6 +367,26 @@ internal sealed class CurrentFightViewModel : ObservableObject
         Notice = message;
     }
 
+    public void ApplyOverlayCustomization(
+        double textSize,
+        bool boldText,
+        string? nameColor,
+        string? statisticColor)
+    {
+        overlayTextSize = double.IsFinite(textSize)
+            ? Math.Clamp(textSize, 9, 24)
+            : 12;
+        overlayBoldText = boldText;
+        overlayNameBrush = CreateBrush(nameColor, DefaultOverlayNameBrush);
+        overlayStatisticBrush = CreateBrush(statisticColor, DefaultOverlayStatisticBrush);
+        RaisePropertyChanged(nameof(OverlayTextSize));
+        RaisePropertyChanged(nameof(OverlayRowHeight));
+        RaisePropertyChanged(nameof(OverlayBoldText));
+        RaisePropertyChanged(nameof(OverlayFontWeight));
+        RaisePropertyChanged(nameof(OverlayNameBrush));
+        RaisePropertyChanged(nameof(OverlayStatisticBrush));
+    }
+
     private void SelectScope(string scope)
     {
         scope = NormalizeScope(scope);
@@ -448,5 +490,20 @@ internal sealed class CurrentFightViewModel : ObservableObject
         var brush = new SolidColorBrush(Color.FromRgb(red, green, blue));
         brush.Freeze();
         return brush;
+    }
+
+    private static Brush CreateBrush(string? value, Brush fallback)
+    {
+        try
+        {
+            var color = (Color)ColorConverter.ConvertFromString(value?.Trim() ?? string.Empty);
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            return brush;
+        }
+        catch (Exception)
+        {
+            return fallback;
+        }
     }
 }

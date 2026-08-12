@@ -606,24 +606,49 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <Grid Background="#01000000" MouseLeftButtonDown="WindowDragArea_MouseLeftButtonDown">
+            <Grid Background="#01000000">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" Margin="7,0" VerticalAlignment="Center">
-                    <Ellipse Width="7" Height="7" Fill="{Binding ParserStatusBrush}" Margin="0,0,6,0" />
-                    <TextBlock Text="{Binding ViewLabel}" Foreground="{StaticResource MutedTextBrush}" FontSize="9" FontWeight="SemiBold" />
+                <Border Grid.Column="0"
+                        Background="#01000000"
+                        MouseLeftButtonDown="WindowDragArea_MouseLeftButtonDown">
+                    <StackPanel Orientation="Horizontal" Margin="7,0" VerticalAlignment="Center">
+                        <Ellipse Width="7" Height="7" Fill="{Binding ParserStatusBrush}" Margin="0,0,6,0" />
+                        <TextBlock Text="{Binding ViewLabel}" Foreground="{StaticResource MutedTextBrush}" FontSize="9" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Margin="6,0">
+                    <TextBlock Text="TRANSPARENCY"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               FontSize="8"
+                               VerticalAlignment="Center" />
+                    <Slider Width="64"
+                            Minimum="0"
+                            Maximum="100"
+                            Value="{Binding BackgroundTransparencyPercent, Mode=TwoWay}"
+                            Style="{StaticResource MonitorSliderStyle}"
+                            ToolTip="{Binding BackgroundTransparencyPercent, StringFormat=Background transparency: {0:0}%}" />
+                    <TextBlock Text="{Binding BackgroundTransparencyPercent, StringFormat={}{0:0}%}"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               FontSize="8"
+                               Width="28"
+                               VerticalAlignment="Center" />
                 </StackPanel>
-                <Button Grid.Column="1"
+                <Button Grid.Column="2"
                         Content="FULL"
                         Command="{Binding ShowFullModeCommand}"
                         Style="{StaticResource TinyButtonStyle}"
                         Padding="5,0"
                         FontSize="9"
                         Margin="0,2,4,2" />
-                <Button Grid.Column="2"
+                <Button Grid.Column="3"
                         Content="×"
                         Click="Close_Click"
                         Style="{StaticResource TinyButtonStyle}"
@@ -650,9 +675,28 @@
                       SelectionMode="Single"
                       SelectionUnit="FullRow"
                       EnableRowVirtualization="True">
+                <DataGrid.Resources>
+                    <Style x:Key="OverlayNameTextStyle" TargetType="TextBlock">
+                        <Setter Property="Foreground"
+                                Value="{Binding DataContext.OverlayNameBrush, RelativeSource={RelativeSource AncestorType={x:Type DataGrid}}}" />
+                        <Setter Property="FontSize"
+                                Value="{Binding DataContext.OverlayTextSize, RelativeSource={RelativeSource AncestorType={x:Type DataGrid}}}" />
+                        <Setter Property="FontWeight"
+                                Value="{Binding DataContext.OverlayFontWeight, RelativeSource={RelativeSource AncestorType={x:Type DataGrid}}}" />
+                    </Style>
+                    <Style x:Key="OverlayStatisticTextStyle" TargetType="TextBlock">
+                        <Setter Property="Foreground"
+                                Value="{Binding DataContext.OverlayStatisticBrush, RelativeSource={RelativeSource AncestorType={x:Type DataGrid}}}" />
+                        <Setter Property="FontSize"
+                                Value="{Binding DataContext.OverlayTextSize, RelativeSource={RelativeSource AncestorType={x:Type DataGrid}}}" />
+                        <Setter Property="FontWeight"
+                                Value="{Binding DataContext.OverlayFontWeight, RelativeSource={RelativeSource AncestorType={x:Type DataGrid}}}" />
+                    </Style>
+                </DataGrid.Resources>
                 <DataGrid.RowStyle>
                     <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
-                        <Setter Property="MinHeight" Value="24" />
+                        <Setter Property="MinHeight"
+                                Value="{Binding DataContext.OverlayRowHeight, RelativeSource={RelativeSource AncestorType={x:Type DataGrid}}}" />
                     </Style>
                 </DataGrid.RowStyle>
                 <DataGrid.ColumnHeaderStyle>
@@ -668,11 +712,11 @@
                     </Style>
                 </DataGrid.CellStyle>
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Player" Binding="{Binding Name}" Width="1.45*" />
-                    <DataGridTextColumn Header="Damage" Binding="{Binding DamageDisplay}" Width="0.95*" />
-                    <DataGridTextColumn Header="Share" Binding="{Binding ShareDisplay}" Width="0.68*" />
-                    <DataGridTextColumn Header="Acc.%" Binding="{Binding AccuracyDisplay}" Width="0.68*" />
-                    <DataGridTextColumn Header="Crit.%" Binding="{Binding CriticalRateDisplay}" Width="0.68*" />
+                    <DataGridTextColumn Header="Player" Binding="{Binding Name}" Width="1.45*" ElementStyle="{StaticResource OverlayNameTextStyle}" />
+                    <DataGridTextColumn Header="Damage" Binding="{Binding DamageDisplay}" Width="0.95*" ElementStyle="{StaticResource OverlayStatisticTextStyle}" />
+                    <DataGridTextColumn Header="Share" Binding="{Binding ShareDisplay}" Width="0.68*" ElementStyle="{StaticResource OverlayStatisticTextStyle}" />
+                    <DataGridTextColumn Header="Acc.%" Binding="{Binding AccuracyDisplay}" Width="0.68*" ElementStyle="{StaticResource OverlayStatisticTextStyle}" />
+                    <DataGridTextColumn Header="Crit.%" Binding="{Binding CriticalRateDisplay}" Width="0.68*" ElementStyle="{StaticResource OverlayStatisticTextStyle}" />
                 </DataGrid.Columns>
             </DataGrid>
         </Grid>

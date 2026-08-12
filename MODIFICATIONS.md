@@ -19,7 +19,9 @@ The Sanctum Edition work includes:
 - Optional SanctumChat/Ashita pet-name expansion using authoritative server mappings
 - SanctumChat pet nameplate expansion and readable spacing for multiword pet names
 - Opt-in SanctumChat detection, installation, updating, and recoverable removal from the modern Tools menu
-- Selectable Sanctum XI and Other compatibility profiles with clean parse boundaries
+- Selectable Sanctum XI, Horizon, and Other compatibility profiles with clean parse boundaries
+- Horizon standard LSB-style DoT calculations with Sanctum-only weapon effects excluded
+- Conservative Horizon pet handling with optional unambiguous KParserBridge owner mappings
 - Conservative Other-server rules and optional passive KParserBridge pet-owner mapping
 - Installer and portable single-file packaging
 - GitHub release update checks, per-release patch notes, package verification, and safe Setup/Portable update application

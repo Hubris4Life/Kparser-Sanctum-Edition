@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Windows.Media;
 using KParser.Sanctum.UI.Models;
 
 namespace KParser.Sanctum.UI.Services;
@@ -64,6 +65,15 @@ internal sealed class UiSettingsService
                 settings.CurrentFightBackgroundTransparencyPercent,
                 0,
                 100);
+            settings.TrueOverlayTextSize = double.IsFinite(settings.TrueOverlayTextSize)
+                ? Math.Clamp(settings.TrueOverlayTextSize, 9, 24)
+                : 12;
+            settings.TrueOverlayNameColor = NormalizeColor(
+                settings.TrueOverlayNameColor,
+                "#F0D18A");
+            settings.TrueOverlayStatisticColor = NormalizeColor(
+                settings.TrueOverlayStatisticColor,
+                "#EBEDF0");
             return settings;
         }
         catch (Exception)
@@ -96,12 +106,16 @@ internal sealed class UiSettingsService
         }
     }
 
-    internal static string NormalizeServerProfile(string? profile) =>
-        string.Equals(profile?.Trim(), "sanctum", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(profile?.Trim(), "sanctum xi", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(profile?.Trim(), "sanctumxi", StringComparison.OrdinalIgnoreCase)
-            ? "sanctum"
-            : "other";
+    internal static string NormalizeServerProfile(string? profile)
+    {
+        string normalized = profile?.Trim().ToLowerInvariant() ?? string.Empty;
+        return normalized switch
+        {
+            "sanctum" or "sanctum xi" or "sanctumxi" or "sanctum-xi" => "sanctum",
+            "horizon" or "horizon xi" or "horizonxi" or "horizon-xi" => "horizon",
+            _ => "other"
+        };
+    }
 
     internal static string NormalizeMonitorDisplayMode(string? displayMode) =>
         displayMode?.Trim().ToLowerInvariant() switch
@@ -110,4 +124,19 @@ internal sealed class UiSettingsService
             "overlay" => "overlay",
             _ => "full"
         };
+
+    internal static string NormalizeColor(string? value, string fallback)
+    {
+        try
+        {
+            var color = (Color)ColorConverter.ConvertFromString(value?.Trim() ?? string.Empty);
+            return color.A == byte.MaxValue
+                ? $"#{color.R:X2}{color.G:X2}{color.B:X2}"
+                : $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
+        }
+        catch (Exception)
+        {
+            return fallback;
+        }
+    }
 }

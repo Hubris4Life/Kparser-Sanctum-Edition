@@ -237,7 +237,7 @@ namespace WaywardGamers.KParser.Bridge
                 {
                     return serializer.Serialize(CreateCommandError(
                         "capturestats",
-                        "Calculated DoT stat capture is available only in the Sanctum XI profile."));
+                        "Calculated DoT stat capture is unavailable for the selected server profile."));
                 }
                 return serializer.Serialize(ProcessCommand(
                     request.Command,
@@ -288,6 +288,7 @@ namespace WaywardGamers.KParser.Bridge
             return commandName == "start" ||
                    commandName == "stop" ||
                    commandName == "reset" ||
+                   commandName == "resetstopped" ||
                    commandName == "detect" ||
                    commandName == "capturestats" ||
                    commandName == "shutdown";

@@ -1,6 +1,6 @@
-# KParser - Sanctum Edition Preview 26
+# KParser - Sanctum Edition Preview 27
 
-Preview 26 focuses on owner-aware pet reporting, physical critical-rate visibility, calculated DoT completeness, a more useful live overlay, and stability diagnostics. It retains Preview 25's complete report and update foundation while hardening the damage timeline and application error handling ahead of wider stability testing.
+Preview 27 expands multi-server compatibility and physical-damage analysis while tightening startup and live-player behavior. It adds a dedicated Horizon profile, a detailed critical-hit report, and persistent True Overlay customization on top of Preview 26's owner-aware pet reporting and stability foundation.
 
 ## Downloads
 
@@ -18,12 +18,13 @@ KParserBridge is included in both packages but is not installed or loaded automa
 - Automatic FFXI chat-memory detection for Sanctum/XiLoader
 - Modern dashboard and compact live monitor
 - Minimal always-on-top True Overlay with damage, share, accuracy, and critical rate
+- Persistent True Overlay transparency, text size, bold text, player-name color, and statistic color controls
 - Running totals and individual-fight filtering
 - Damage, defense, healing, buffs, debuffs, EXP, HELM, crafting, chat, item-drop, and consumable-use reports
 - Interactive interval and cumulative damage timeline with hover details
 - Weapon-skill pacing and TP-cycle proxy statistics, including optional legacy TP-return echoes
 - Expanded multi-attack round details, extra attacks, Zanshin candidates, and retaliation counts
-- Accuracy, share, Corsair roll, DoT estimation, and build-comparison reports
+- Accuracy, share, critical-hit high/low/average/rate, Corsair roll, DoT estimation, and build-comparison reports
 - Owner-attributed pet totals by default with an optional separate pet row that identifies its master
 - Pet-initiated encounter tracking before the owner deals direct damage
 - Successful zero-damage Dia, Diaga, and Bio applications in calculated DoT and Magic reports
@@ -32,15 +33,17 @@ KParserBridge is included in both packages but is not installed or loaded automa
 - Automatic update checks at startup, manual checks under Help, and an optional preview-release channel
 - Separate patch-note pages when multiple versions are available
 - SHA-256-verified Setup and Portable update application with portable rollback protection
-- Server > Sanctum XI / Other with persistent, engine-level rule isolation
+- Server > Sanctum XI / Horizon / Other with persistent, engine-level rule isolation
 - Clean parse boundary whenever the active server profile changes
-- Sanctum-only pet naming, calculated DoTs, and DoT stat capture limited to Sanctum XI
-- Optional passive KParserBridge pet-owner mapping for Other servers
+- Sanctum-only pet naming and weapon-effect DoT rules limited to Sanctum XI
+- Standard LSB-style calculated DoTs and player-stat registration for Horizon
+- Optional passive KParserBridge pet-owner mapping for Horizon and Other servers
 - Separate player-only and pet-only damage filters for reviewing each contribution
 - Tools > KParserBridge Addon with Ashita detection, manual selection, safe updates, and recoverable removal
 - Tools > Diagnostics with redacted support-report copying and direct access to local error logs
 - Hardened timeline rendering with dark/light theme regression coverage
 - XiLoader, Horizon Loader, PlayOnline, and FFXIMain client-window recognition
+- Clean startup parse state and live-session-only Player Information detection
 
 ## Requirements and limitations
 
@@ -62,4 +65,4 @@ KParser reads the locally running FFXI process and stores parser data on the sam
 
 KParser - Sanctum Edition is distributed under GNU GPL version 2 or later. It is based on KParser and preserves the original project notices. Matching source and modification history are available at:
 
-https://github.com/Hubris4Life/Kparser-Sanctum-Edition/releases/tag/v0.26.0-preview
+https://github.com/Hubris4Life/Kparser-Sanctum-Edition/releases/tag/v0.27.0-preview
